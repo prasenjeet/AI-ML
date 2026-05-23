@@ -1,6 +1,9 @@
 # Machine Learning Concepts — Sample Project
 
-A self-contained Python project that demonstrates six fundamental machine learning techniques using **scikit-learn**. Each concept has its own module with multiple algorithm variants, hyperparameter sweeps, evaluation metrics, and saved plots.
+A self-contained Python project that demonstrates six fundamental machine learning techniques using **scikit-learn**. Available in two modes:
+
+- **Interactive UI** — Streamlit web app with live inputs, dynamic plots, and metric cards
+- **CLI runner** — terminal script with printed results and saved PNG charts
 
 ---
 
@@ -9,7 +12,8 @@ A self-contained Python project that demonstrates six fundamental machine learni
 - [Concepts Covered](#concepts-covered)
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
-- [Usage](#usage)
+- [Interactive UI](#interactive-ui-apppy)
+- [CLI Runner](#cli-runner-mainpy)
 - [Concept Details](#concept-details)
   - [Linear Regression](#1-linear-regression)
   - [Decision Tree](#2-decision-tree)
@@ -27,11 +31,11 @@ A self-contained Python project that demonstrates six fundamental machine learni
 | # | Concept | Algorithms | Dataset |
 |---|---------|------------|---------|
 | 1 | Linear Regression | OLS, Ridge, Lasso, Polynomial | Synthetic regression |
-| 2 | Decision Tree | Classification & Regression tree, CCP pruning | Iris |
+| 2 | Decision Tree | Classification & Regression tree, CCP pruning | Iris / Wine / Synthetic |
 | 3 | K-Means Clustering | K-Means, Agglomerative | Synthetic blobs |
-| 4 | Bagging & Random Forest | BaggingClassifier, RandomForest, ExtraTrees | Wine |
-| 5 | Boosting | AdaBoost, GradientBoosting, HistGradientBoosting | Wine |
-| 6 | Ensemble Methods | Hard/Soft/Weighted Voting, Stacking | Wine |
+| 4 | Bagging & Random Forest | BaggingClassifier, RandomForest, ExtraTrees | Wine / Iris / Synthetic |
+| 5 | Boosting | AdaBoost, GradientBoosting, HistGradientBoosting | Wine / Iris / Synthetic |
+| 6 | Ensemble Methods | Hard/Soft/Weighted Voting, Stacking | Wine / Iris / Synthetic |
 
 ---
 
@@ -39,8 +43,10 @@ A self-contained Python project that demonstrates six fundamental machine learni
 
 ```
 AI-ML/
-├── main.py                          # CLI entry point
+├── app.py                           # ★ Streamlit interactive UI
+├── main.py                          # CLI runner
 ├── requirements.txt
+├── .gitignore
 ├── plots/                           # Generated PNG charts (21 files)
 └── ml_concepts/
     ├── utils/
@@ -60,41 +66,81 @@ AI-ML/
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 2. Run all concepts (prints results, shows plots interactively)
-python main.py
+# Option A — Interactive UI (recommended)
+streamlit run app.py
 
-# 3. Run all concepts and save plots as PNGs to ./plots/
+# Option B — CLI, run all concepts
 python main.py --save-plots
 ```
 
 ---
 
-## Usage
+## Interactive UI (`app.py`)
+
+The Streamlit app provides a fully interactive experience — adjust any input and results update instantly without rerunning anything manually.
+
+```bash
+streamlit run app.py
+```
+
+### Layout
+
+```
+┌─────────────────────────┬─────────────────────────────────────────┐
+│  Sidebar                │  Main area                              │
+│  ───────────────        │  ─────────────────────────────          │
+│  🤖 ML Concepts         │  Metric cards (R², Accuracy, etc.)      │
+│                         │                                         │
+│  Page navigation        │  Side-by-side interactive plots         │
+│  (7 pages)              │                                         │
+│                         │  Expandable analysis sections           │
+│  ───────────────        │                                         │
+│  Concept-specific       │  Key concept takeaway                   │
+│  sliders & dropdowns    │                                         │
+└─────────────────────────┴─────────────────────────────────────────┘
+```
+
+### Pages & Controls
+
+| Page | Sidebar Inputs | Live Outputs |
+|------|----------------|--------------|
+| **🏠 Home** | — | Overview cards for all 6 concepts |
+| **📈 Linear Regression** | Variant (OLS/Ridge/Lasso/Poly), alpha, degree, samples, noise, test split | Predicted vs Actual, Residual plot, Learning curve, Coefficients table, All-variant comparison |
+| **🌳 Decision Tree** | Dataset, task (classify/regress), criterion, max_depth, min_samples_split, CCP alpha | Tree diagram, Feature importance, Confusion matrix, Depth sweep chart, CCP alpha sweep |
+| **🔵 K-Means Clustering** | Samples, true clusters, spread, k, k sweep range, init, n_init, agglomerative linkage | Elbow curve, Silhouette bar chart, Cluster scatter, Ground truth scatter, Agglomerative comparison, Sweep table |
+| **🌲 Bagging & Random Forest** | Dataset, n_estimators, max_depth, max_features, OOB toggle, comparator checkboxes (DT/Bagging/ExtraTrees) | Feature importances, Confusion matrix, Model comparison, n_estimators sweep, max_features sweep |
+| **⚡ Boosting** | Dataset, AdaBoost (n, lr, depth) and GBM (n, lr, depth, subsample) controls | Stagewise error curves (AdaBoost + GBM), Feature importances, Confusion matrix, Algorithm comparison, LR sweep |
+| **🎯 Ensemble Methods** | Dataset, per-learner checkboxes (DT/RF/GBM/KNN/NB/SVM), per-strategy checkboxes (Hard/Soft/Weighted/Stack-LR/Stack-RF) | Individual accuracy metrics, Ensemble accuracy metrics, Full comparison bar chart, Confusion matrix, Diversity heatmap, Results table |
+
+---
+
+## CLI Runner (`main.py`)
+
+Run concepts from the terminal with printed metrics and optional PNG output.
 
 ```
 python main.py [--topic TOPIC] [--save-plots]
 
 Options:
-  --topic   Run a single concept module (default: all)
-            Choices: lr | dt | km | rf | boost | ens
-  --save-plots
-            Save plots as PNG files to ./plots/ instead of displaying them
+  --topic       Run a single concept (default: all)
+                Choices: lr | dt | km | rf | boost | ens
+  --save-plots  Save charts as PNGs to ./plots/
 ```
 
 **Examples:**
 
 ```bash
-python main.py                      # Run all 6 concepts
-python main.py --topic lr           # Linear Regression only
-python main.py --topic dt           # Decision Tree only
-python main.py --topic km           # K-Means Clustering only
-python main.py --topic rf           # Bagging & Random Forest only
-python main.py --topic boost        # Boosting only
-python main.py --topic ens          # Ensemble Methods only
-python main.py --save-plots         # Save all 21 charts to ./plots/
+python main.py                          # All 6 concepts
+python main.py --topic lr               # Linear Regression only
+python main.py --topic dt               # Decision Tree only
+python main.py --topic km               # K-Means Clustering only
+python main.py --topic rf               # Bagging & Random Forest only
+python main.py --topic boost            # Boosting only
+python main.py --topic ens              # Ensemble Methods only
+python main.py --save-plots             # Save all 21 charts to ./plots/
 python main.py --topic rf --save-plots  # RF only, save plots
 ```
 
@@ -103,99 +149,92 @@ python main.py --topic rf --save-plots  # RF only, save plots
 ## Concept Details
 
 ### 1. Linear Regression
-**File:** `ml_concepts/models/linear_regression.py`
+**CLI module:** `ml_concepts/models/linear_regression.py`
 
-Explores the linear family of regression models on a synthetic dataset with 500 samples and 8 features.
+Explores the linear family of regression models on a synthetic dataset.
 
 | Variant | Key parameter | Purpose |
 |---------|--------------|---------|
 | OLS (Ordinary Least Squares) | — | Baseline; minimises sum of squared residuals |
 | Ridge | `alpha` (L2 penalty) | Shrinks all coefficients; handles multicollinearity |
 | Lasso | `alpha` (L1 penalty) | Zeros out weak features; built-in variable selection |
-| Polynomial (deg 2) | `degree=2` | Captures non-linear relationships via feature expansion |
+| Polynomial (deg 2–5) | `degree` | Captures non-linear relationships via feature expansion |
 
-**Output includes:**
-- MSE, RMSE, MAE, R² for each variant
-- Predicted vs Actual scatter plot with residual plot
-- Learning curve (training size vs R² score)
-- Model comparison bar chart
+**Interactive UI inputs:** samples, features, noise, test split %, variant selector, alpha slider, polynomial degree slider
+
+**Output:** MSE · RMSE · MAE · R² · Predicted vs Actual · Residual plot · Learning curve · Coefficients table · All-variant comparison chart
 
 **Key concept:** Regularisation (Ridge/Lasso) trades a small increase in bias for a large reduction in variance, improving generalisation on unseen data.
 
 ---
 
 ### 2. Decision Tree
-**File:** `ml_concepts/models/decision_tree.py`
+**CLI module:** `ml_concepts/models/decision_tree.py`
 
-Demonstrates classification and regression trees with pruning strategies on the Iris dataset.
+Demonstrates classification and regression trees with pruning strategies.
 
 **What's explored:**
 - **Criterion comparison** — Gini impurity vs Information Gain (Entropy)
-- **Depth sweep** — `max_depth` from 1 to 10, showing underfitting → overfitting
+- **Depth sweep** — `max_depth` from 1–15, showing underfitting → overfitting transition
 - **Cost-complexity pruning (CCP)** — `ccp_alpha` parameter to post-prune the tree
 - **Regression tree** — predicts continuous values on a synthetic dataset
 
-**Output includes:**
-- Full tree visualisation (coloured nodes)
-- Feature importance bar chart
-- Confusion matrix
-- Depth vs accuracy comparison chart
+**Interactive UI inputs:** dataset (Iris/Wine/Synthetic), task (classify/regress), criterion, max_depth, min_samples_split, CCP alpha
+
+**Output:** Tree visualisation · Feature importance · Confusion matrix · Depth sweep chart · CCP alpha sweep chart
 
 **Key concept:** A single unpruned tree memorises training data. Controlling `max_depth` or `ccp_alpha` is essential to generalise beyond the training set.
 
 ---
 
 ### 3. K-Means Clustering
-**File:** `ml_concepts/models/kmeans_clustering.py`
+**CLI module:** `ml_concepts/models/kmeans_clustering.py`
 
-Unsupervised clustering on synthetic 2D blob data with 4 true clusters and 400 samples.
+Unsupervised clustering on synthetic 2D blob data.
 
 **What's explored:**
-- **Elbow method** — inertia (within-cluster SSE) vs k from 1–10
+- **Elbow method** — inertia (within-cluster SSE) vs k
 - **Silhouette analysis** — finds optimal k by maximising average silhouette score
 - **Initialisation strategies** — `k-means++` vs `random` (convergence quality)
-- **Agglomerative hierarchical clustering** — ward, complete, average linkage as alternative
+- **Agglomerative hierarchical clustering** — ward, complete, average, single linkage
 
-**Metrics reported:** Inertia, Silhouette Score, Davies-Bouldin Index
+**Metrics reported:** Inertia · Silhouette Score · Davies-Bouldin Index
 
-**Output includes:**
-- Elbow curve
-- Final cluster scatter plot with centroids
-- Agglomerative cluster plot
-- Ground truth label plot for comparison
+**Interactive UI inputs:** samples, true clusters, cluster spread, k, sweep range, init strategy, n_init, agglomerative linkage
+
+**Output:** Elbow curve · Silhouette bar chart · Cluster scatter with centroids · Ground truth comparison · Agglomerative side-by-side · Sweep results table
 
 **Key concept:** K-Means is sensitive to scale and initialisation. Always standardise features and prefer `k-means++` init. Use silhouette score alongside the elbow to confirm k.
 
 ---
 
 ### 4. Bagging & Random Forest
-**File:** `ml_concepts/models/bagging_random_forest.py`
+**CLI module:** `ml_concepts/models/bagging_random_forest.py`
 
-Demonstrates how bagging reduces variance on the Wine dataset (178 samples, 13 features, 3 classes).
+Demonstrates how bagging reduces variance by aggregating many decorrelated trees.
 
 | Model | Core idea |
 |-------|-----------|
-| Single Decision Tree | High variance baseline |
+| Single Decision Tree | High-variance baseline |
 | BaggingClassifier | Bootstrap samples + aggregate predictions |
 | RandomForestClassifier | Bagging + random feature subset at each split |
 | ExtraTreesClassifier | RF + randomised split thresholds |
 
 **What's explored:**
 - **OOB (Out-of-Bag) score** — free cross-validation estimate without a held-out set
-- **n_estimators sweep** — 1 to 200 trees, showing diminishing returns
+- **n_estimators sweep** — 1 to 500 trees, showing diminishing returns
 - **max_features sweep** — `sqrt`, `log2`, `None`, `0.3`, `0.6`
 
-**Output includes:**
-- Feature importance chart (RF)
-- Confusion matrix
-- Comparison bar chart (single DT → Bagging → RF → ExtraTrees)
+**Interactive UI inputs:** dataset, n_estimators, max_depth, max_features, OOB toggle, comparator checkboxes
 
-**Key concept:** Bagging reduces variance by averaging independent high-variance models. Random Forest decorrelates those models further by limiting which features each tree can consider, leading to stronger ensembles.
+**Output:** Feature importance chart · Confusion matrix · Model comparison bar chart · n_estimators sweep · max_features sweep
+
+**Key concept:** Bagging reduces variance by averaging independent high-variance models. Random Forest decorrelates those models further by limiting which features each tree can consider.
 
 ---
 
 ### 5. Boosting
-**File:** `ml_concepts/models/boosting.py`
+**CLI module:** `ml_concepts/models/boosting.py`
 
 Sequential ensemble learning — each new model corrects the errors of the previous ones.
 
@@ -210,20 +249,18 @@ Sequential ensemble learning — each new model corrects the errors of the previ
 - **Learning-rate sweep** — `lr` from 0.001 to 1.0 (shrinkage vs speed trade-off)
 - **Feature importance** from the GBM model
 
-**Output includes:**
-- AdaBoost stagewise error chart
-- GBM stagewise error chart
-- Feature importance bar chart
-- Boosting algorithm comparison chart
+**Interactive UI inputs:** dataset, AdaBoost controls (n, lr, depth), GBM controls (n, lr, depth, subsample)
+
+**Output:** AdaBoost stagewise error · GBM stagewise error · Feature importances · Best-model confusion matrix · Algorithm comparison · Learning rate sweep table
 
 **Key concept:** Boosting reduces bias by sequentially fitting weak learners to the errors. A lower learning rate with more estimators consistently generalises better but requires more computation.
 
 ---
 
 ### 6. Ensemble Methods
-**File:** `ml_concepts/models/ensemble.py`
+**CLI module:** `ml_concepts/models/ensemble.py`
 
-Combines six diverse base learners (DT, RF, GBM, KNN, Naive Bayes, SVM) into higher-level ensembles.
+Combines six diverse base learners into higher-level ensembles.
 
 | Strategy | How it combines predictions |
 |----------|-----------------------------|
@@ -234,15 +271,14 @@ Combines six diverse base learners (DT, RF, GBM, KNN, Naive Bayes, SVM) into hig
 | **Stacking (RF meta)** | Random Forest learns from base predictions |
 
 **What's explored:**
-- **Diversity analysis** — pairwise agreement matrix between all base learners
-- **CV evaluation** of the best stacking configuration
+- **Diversity analysis** — pairwise prediction agreement heatmap between all base learners
+- **CV evaluation** of stacking configurations
 
-**Output includes:**
-- Pairwise agreement matrix (printed)
-- Best ensemble confusion matrix
-- Full comparison bar chart (all base models + all ensembles)
+**Interactive UI inputs:** dataset, per-learner checkboxes (DT/RF/GBM/KNN/NB/SVM), per-strategy checkboxes
 
-**Key concept:** Ensemble power comes from **diversity**, not just individual accuracy. Models that disagree on hard examples — even if each is imperfect — combine to outperform any single model.
+**Output:** Individual accuracy metrics · Ensemble accuracy metrics · Full comparison bar chart · Best-ensemble confusion matrix · Diversity heatmap · Ranked results table
+
+**Key concept:** Ensemble power comes from **diversity**, not just individual accuracy. Low pairwise agreement means errors don't overlap — ideal for combining.
 
 ---
 
@@ -260,7 +296,7 @@ Running `python main.py --save-plots` produces 21 charts in `./plots/`:
 | `dt_confusion.png` | Decision tree confusion matrix |
 | `dt_depth_comparison.png` | Test accuracy vs max_depth |
 | `km_elbow.png` | Elbow curve (inertia vs k) |
-| `km_clusters.png` | Final K-Means cluster scatter |
+| `km_clusters.png` | Final K-Means cluster scatter with centroids |
 | `km_agglomerative.png` | Agglomerative clustering scatter |
 | `km_true_labels.png` | Ground truth labels scatter |
 | `rf_feature_importance.png` | Random Forest feature importances |
@@ -284,6 +320,7 @@ pandas>=2.0.0
 scikit-learn>=1.3.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
+streamlit>=1.35.0
 ```
 
 Install with:
