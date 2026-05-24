@@ -4,6 +4,9 @@ Streamlit Interactive UI – ML Concepts Demo
 Run:   streamlit run app.py
 """
 
+import os as _os_top
+_os_top.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import matplotlib
 matplotlib.use("Agg")
 
@@ -95,6 +98,9 @@ with st.sidebar:
             "⚡  Boosting",
             "🎯  Ensemble Methods",
             "🧠  Neural Networks",
+            "📝  NLP",
+            "🖼️  Computer Vision",
+            "🎬  Recommendations",
         ],
         label_visibility="collapsed",
     )
@@ -125,6 +131,9 @@ def page_home():
         ("🖼️", "CNN",                      "Conv2D · Pooling · MNIST · filter sweep"),
         ("🔁", "RNN",                      "SimpleRNN · seq length · stacked layers"),
         ("⏳", "LSTM",                     "Gates · GRU · Bidirectional · long-range memory"),
+        ("📝", "NLP",                      "TF-IDF · Classification · Sentiment · Topics"),
+        ("🖼️", "Computer Vision",          "Augmentation · HOG · CNN CIFAR-10 · Transfer"),
+        ("🎬", "Recommendations",          "User-CF · Item-CF · SVD · Content-Based"),
     ]
     cols = st.columns(3)
     for i, (icon, name, desc) in enumerate(cards):
@@ -1744,6 +1753,1019 @@ def page_neural_networks():
     with tab_lstm: _tab_lstm()
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# NLP PAGE
+# ══════════════════════════════════════════════════════════════════════════════
+def page_nlp():
+    import re, warnings
+    warnings.filterwarnings("ignore")
+    import nltk
+    for _r in ["punkt","punkt_tab","stopwords","wordnet",
+               "averaged_perceptron_tagger","averaged_perceptron_tagger_eng",
+               "vader_lexicon","omw-1.4"]:
+        nltk.download(_r, quiet=True)
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords as nltk_sw
+    from nltk.stem import PorterStemmer, WordNetLemmatizer
+    from nltk.sentiment.vader import SentimentIntensityAnalyzer
+    from sklearn.datasets import fetch_20newsgroups
+    from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+    from sklearn.naive_bayes import ComplementNB
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.svm import LinearSVC
+    from sklearn.decomposition import LatentDirichletAllocation
+    from sklearn.pipeline import Pipeline
+    from sklearn.metrics import accuracy_score, classification_report
+
+    STOP_W = set(nltk_sw.words("english"))
+    STEMMER = PorterStemmer(); LEMMA = WordNetLemmatizer()
+
+    def clean(text):
+        return re.sub(r"\s+", " ", re.sub(r"[^a-z\s']", " ", text.lower())).strip()
+
+    def preprocess(text, stem=False, lemma=True):
+        tokens = [t for t in word_tokenize(clean(text)) if t.isalpha() and t not in STOP_W and len(t) > 2]
+        if stem:   tokens = [STEMMER.stem(t) for t in tokens]
+        elif lemma:tokens = [LEMMA.lemmatize(t) for t in tokens]
+        return tokens
+
+    st.title("📝 Natural Language Processing")
+    st.markdown("Text preprocessing, classification, sentiment analysis, and topic modelling — all interactive.")
+
+    tab_pre, tab_cls, tab_sent, tab_topic, tab_tfidf = st.tabs([
+        "🔤 Preprocessing", "🏷️ Classification", "💭 Sentiment", "📚 Topics", "📊 TF-IDF Explorer"
+    ])
+
+    # ── Preprocessing tab ─────────────────────────────────────────────────────
+    with tab_pre:
+        st.subheader("Text Preprocessing Pipeline")
+        default = "Machine learning algorithms automatically discover patterns from large datasets without explicit rules."
+        text_in = st.text_area("Enter text", default, height=90, key="nlp_text")
+        c1, c2 = st.columns(2)
+        rm_stop = c1.checkbox("Remove stopwords", True, key="nlp_rs")
+        use_lem = c1.checkbox("Lemmatise",        True, key="nlp_lem")
+        use_stem= c2.checkbox("Stem",             False, key="nlp_stem")
+        n_gram  = c2.selectbox("N-gram range", ["Unigram (1,1)","Bigram (1,2)","Trigram (1,3)"], key="nlp_ng")
+        ng_map  = {"Unigram (1,1)":(1,1),"Bigram (1,2)":(1,2),"Trigram (1,3)":(1,3)}
+        ng      = ng_map[n_gram]
+
+        tokens_raw   = [t for t in word_tokenize(clean(text_in)) if t.isalpha()]
+        tokens_stop  = [t for t in tokens_raw if t not in STOP_W] if rm_stop else tokens_raw
+        tokens_final = ([STEMMER.stem(t) for t in tokens_stop] if use_stem
+                        else ([LEMMA.lemmatize(t) for t in tokens_stop] if use_lem else tokens_stop))
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Original tokens", len(tokens_raw))
+        col2.metric("After stopword removal", len(tokens_stop))
+        col3.metric("After stem/lemma", len(tokens_final))
+
+        st.markdown("**Processed tokens:**")
+        st.code(" · ".join(tokens_final))
+
+        if tokens_final:
+            from collections import Counter
+            freq = Counter(tokens_final).most_common(15)
+            words, counts = zip(*freq)
+            fig, ax = plt.subplots(figsize=(10, 3))
+            ax.bar(words, counts, color=PALETTE[0])
+            ax.set_title("Word Frequency"); ax.set_ylabel("Count")
+            plt.xticks(rotation=40, ha="right"); fig_to_st(fig)
+
+        # N-gram TF-IDF on sample corpus
+        corpus = [
+            "Machine learning uses data to build predictive models.",
+            "Deep learning neural networks process complex patterns.",
+            "Natural language processing handles text and speech data.",
+            "Computer vision algorithms interpret images and video.",
+            "Reinforcement learning agents learn through trial and reward.",
+        ] + [text_in]
+        tv = TfidfVectorizer(ngram_range=ng)
+        X_corp = tv.fit_transform(corpus)
+        feat_names = tv.get_feature_names_out()
+        mean_scores = X_corp.mean(axis=0).A1
+        top_idx = mean_scores.argsort()[-15:][::-1]
+        fig, ax = plt.subplots(figsize=(10, 3))
+        ax.barh(feat_names[top_idx][::-1], mean_scores[top_idx][::-1], color=PALETTE[1])
+        ax.set_title(f"Top TF-IDF Terms  (n-gram={ng})"); ax.set_xlabel("Mean TF-IDF")
+        fig_to_st(fig)
+
+    # ── Classification tab ────────────────────────────────────────────────────
+    with tab_cls:
+        st.subheader("Text Classification — 20 Newsgroups")
+        ALL_CATS = ["sci.med","sci.space","rec.sport.baseball",
+                    "talk.politics.misc","comp.graphics","rec.motorcycles",
+                    "sci.electronics","talk.religion.misc"]
+        selected_cats = st.multiselect("Categories", ALL_CATS,
+                                       default=ALL_CATS[:4], key="nlp_cats")
+        c1, c2, c3 = st.columns(3)
+        vec_type = c1.selectbox("Vectorizer", ["TF-IDF","Count","Binary"], key="nlp_vec")
+        clf_name = c2.selectbox("Classifier",
+                                ["Complement NB","Logistic Regression","Linear SVM"], key="nlp_clf")
+        max_feat = c3.select_slider("Max features",
+                                    [1000,5000,10000,20000,50000], value=10000, key="nlp_mf")
+        use_ngram= c1.checkbox("Add bigrams", True, key="nlp_bg")
+        rm_hdr   = c2.checkbox("Remove headers/footers", True, key="nlp_hdr")
+
+        if len(selected_cats) < 2:
+            st.warning("Select at least 2 categories."); return
+
+        if st.button("🚀 Train Classifier", key="nlp_train"):
+            with st.spinner("Fetching data and training …"):
+                remove = ("headers","footers","quotes") if rm_hdr else ()
+                data = fetch_20newsgroups(subset="all", categories=selected_cats, remove=remove)
+                from sklearn.model_selection import train_test_split as tts
+                X_tr, X_te, y_tr, y_te = tts(data.data, data.target, test_size=0.25, random_state=42)
+
+                ng_r = (1,2) if use_ngram else (1,1)
+                if vec_type == "TF-IDF":
+                    vec = TfidfVectorizer(max_features=max_feat, sublinear_tf=True,
+                                         stop_words="english", ngram_range=ng_r)
+                elif vec_type == "Count":
+                    vec = CountVectorizer(max_features=max_feat, stop_words="english", ngram_range=ng_r)
+                else:
+                    vec = CountVectorizer(max_features=max_feat, stop_words="english",
+                                         binary=True, ngram_range=ng_r)
+
+                Xtr = vec.fit_transform(X_tr); Xte = vec.transform(X_te)
+
+                clf_map = {
+                    "Complement NB":       ComplementNB(alpha=0.1),
+                    "Logistic Regression": LogisticRegression(max_iter=500, C=5, random_state=42),
+                    "Linear SVM":          LinearSVC(C=1.0, max_iter=2000),
+                }
+                clf = clf_map[clf_name]; clf.fit(Xtr, y_tr)
+                y_pred = clf.predict(Xte)
+                acc = accuracy_score(y_te, y_pred)
+
+            show_metrics({"Accuracy": f"{acc:.4f}", "Categories": str(len(selected_cats)),
+                          "Train size": str(len(X_tr)), "Test size": str(len(X_te))})
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Confusion Matrix")
+                cm_v = confusion_matrix(y_te, y_pred)
+                fig, ax = plt.subplots(figsize=(6, 5))
+                ConfusionMatrixDisplay(cm_v, display_labels=selected_cats).plot(
+                    ax=ax, colorbar=False, cmap="Blues", xticks_rotation=30)
+                fig_to_st(fig)
+            with col2:
+                st.subheader("Top TF-IDF Terms")
+                Xall = vec.transform(data.data)
+                mn   = Xall.mean(axis=0).A1
+                ti   = mn.argsort()[-15:][::-1]
+                fn   = vec.get_feature_names_out()
+                fig, ax = plt.subplots(figsize=(6, 5))
+                ax.barh(fn[ti][::-1], mn[ti][::-1], color=PALETTE[0])
+                ax.set_title("Top 15 TF-IDF Terms"); ax.set_xlabel("Mean score")
+                fig_to_st(fig)
+
+            with st.expander("Full Classification Report"):
+                st.code(classification_report(y_te, y_pred, target_names=selected_cats))
+        else:
+            st.info("👆 Choose categories and classifier, then click **Train Classifier**.")
+
+    # ── Sentiment tab ─────────────────────────────────────────────────────────
+    with tab_sent:
+        st.subheader("Sentiment Analysis — VADER Lexicon")
+        sia = SentimentIntensityAnalyzer()
+        PRESETS = {
+            "😊 Positive":  "This product is absolutely fantastic! Best purchase I've ever made. Highly recommend to everyone!",
+            "😞 Negative":  "Terrible quality. Broke after one day. Complete waste of money. Very disappointed with the purchase.",
+            "😐 Neutral":   "The package arrived on Thursday. It contains the standard components as described in the manual.",
+            "🤔 Mixed":     "The food was amazing but the service was incredibly slow and the price was quite high for the portions.",
+            "Custom":       "",
+        }
+        preset = st.selectbox("Choose a preset or enter custom text", list(PRESETS.keys()), key="nlp_sp")
+        default_sent = PRESETS[preset]
+        sentiment_text = st.text_area("Text to analyse", default_sent, height=80, key="nlp_stext")
+
+        if sentiment_text.strip():
+            scores = sia.polarity_scores(sentiment_text)
+            compound = scores["compound"]
+            label    = "Positive 😊" if compound > 0.05 else ("Negative 😞" if compound < -0.05 else "Neutral 😐")
+
+            show_metrics({"Compound": f"{compound:+.3f}", "Positive": f"{scores['pos']:.3f}",
+                          "Neutral": f"{scores['neu']:.3f}", "Negative": f"{scores['neg']:.3f}",
+                          "Verdict": label})
+
+            # Gauge-like bar
+            fig, ax = plt.subplots(figsize=(10, 2))
+            color = "#27ae60" if compound > 0.05 else ("#e74c3c" if compound < -0.05 else "#95a5a6")
+            ax.barh(["Compound"], [compound + 1], color="#ecf0f1", height=0.5)
+            ax.barh(["Compound"], [compound + 1 - 1], left=[1], color=color, height=0.5)
+            ax.axvline(1, color="gray", lw=1, ls="--")
+            ax.set_xlim(0, 2); ax.set_xticks([0, 0.5, 1, 1.5, 2])
+            ax.set_xticklabels(["-1 (neg)", "-0.5", "0 (neutral)", "+0.5", "+1 (pos)"])
+            ax.set_title(f"Sentiment: {label}  (compound = {compound:+.3f})")
+            fig_to_st(fig)
+
+            # Token-level sentiment
+            st.subheader("Token-level Sentiment Scores")
+            tokens = word_tokenize(sentiment_text)[:30]
+            tok_scores = [(t, sia.polarity_scores(t)["compound"]) for t in tokens if t.isalpha()]
+            if tok_scores:
+                t_names, t_vals = zip(*tok_scores)
+                t_cols = ["#27ae60" if v > 0.1 else ("#e74c3c" if v < -0.1 else "#95a5a6") for v in t_vals]
+                fig, ax = plt.subplots(figsize=(12, 3))
+                ax.bar(t_names, t_vals, color=t_cols)
+                ax.axhline(0, color="black", lw=0.8)
+                ax.set_title("Per-token Sentiment (VADER)")
+                plt.xticks(rotation=45, ha="right"); fig_to_st(fig)
+
+            # Batch analysis of all presets
+            with st.expander("Compare All Preset Texts"):
+                rows = []
+                for name, txt in PRESETS.items():
+                    if not txt: continue
+                    s = sia.polarity_scores(txt)
+                    rows.append({"Text": name, "Compound": round(s["compound"],3),
+                                 "Positive": round(s["pos"],3), "Neutral": round(s["neu"],3),
+                                 "Negative": round(s["neg"],3)})
+                st.dataframe(pd.DataFrame(rows), use_container_width=True)
+
+    # ── Topic Modelling tab ───────────────────────────────────────────────────
+    with tab_topic:
+        st.subheader("Topic Modelling — Latent Dirichlet Allocation (LDA)")
+        c1, c2, c3 = st.columns(3)
+        n_topics  = c1.slider("Number of topics", 2, 10, 5, key="nlp_nt")
+        top_words = c2.slider("Words per topic",   5, 20, 12, key="nlp_tw")
+        max_iter  = c3.slider("LDA iterations",    5, 30,  15, key="nlp_iter")
+        cats_lda  = st.multiselect("Categories",
+                                   ["sci.med","sci.space","rec.sport.baseball",
+                                    "talk.politics.misc","comp.graphics","rec.motorcycles"],
+                                   default=["sci.med","sci.space","rec.sport.baseball",
+                                            "talk.politics.misc","comp.graphics"],
+                                   key="nlp_lda_cats")
+
+        if st.button("🚀 Fit LDA", key="nlp_lda"):
+            with st.spinner("Fitting LDA …"):
+                data = fetch_20newsgroups(subset="train", categories=cats_lda,
+                                         remove=("headers","footers","quotes"))
+                cv_lda = CountVectorizer(max_features=8000, stop_words="english", max_df=0.95, min_df=3)
+                X_lda  = cv_lda.fit_transform(data.data)
+                lda    = LatentDirichletAllocation(n_components=n_topics, max_iter=max_iter,
+                                                   learning_method="online", random_state=42)
+                lda.fit(X_lda)
+                fn = cv_lda.get_feature_names_out()
+
+            show_metrics({"Topics": str(n_topics), "Documents": str(X_lda.shape[0]),
+                          "Vocabulary": str(X_lda.shape[1]),
+                          "Perplexity": f"{lda.perplexity(X_lda):.1f}"})
+
+            ncols = min(n_topics, 5)
+            nrows = (n_topics + ncols - 1) // ncols
+            fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 3.5, nrows * 4))
+            axes = np.array(axes).flatten()
+            for i, (topic, ax) in enumerate(zip(lda.components_, axes)):
+                idx  = topic.argsort()[-top_words:][::-1]
+                wds  = fn[idx]; vals = topic[idx] / topic.sum()
+                ax.barh(wds[::-1], vals[::-1], color=PALETTE[i % 10])
+                ax.set_title(f"Topic {i+1}", fontweight="bold", fontsize=9)
+                ax.tick_params(labelsize=7)
+            for ax in axes[n_topics:]: ax.axis("off")
+            plt.suptitle("LDA Topics — Top Words", fontsize=12, fontweight="bold")
+            plt.tight_layout(); st.pyplot(fig); plt.close(fig)
+
+            # Topic distribution over corpus
+            doc_topics = lda.transform(X_lda)
+            dom_topic  = doc_topics.argmax(axis=1)
+            fig, ax = plt.subplots(figsize=(8, 3))
+            counts = np.bincount(dom_topic, minlength=n_topics)
+            ax.bar([f"T{i+1}" for i in range(n_topics)], counts,
+                   color=[PALETTE[i % 10] for i in range(n_topics)])
+            ax.set_title("Document Count per Dominant Topic"); ax.set_ylabel("Documents")
+            fig_to_st(fig)
+        else:
+            st.info("👆 Select categories and click **Fit LDA** to discover topics.")
+
+    # ── TF-IDF Explorer tab ───────────────────────────────────────────────────
+    with tab_tfidf:
+        st.subheader("TF-IDF Matrix Explorer")
+        st.markdown("Enter 3–6 short documents and explore their TF-IDF representation.")
+        docs_default = [
+            "deep learning transforms computer vision and image recognition tasks",
+            "natural language processing enables machines to understand human text",
+            "reinforcement learning agents optimise decisions through environment rewards",
+            "generative adversarial networks create realistic synthetic images",
+            "transformer architecture revolutionised natural language processing models",
+        ]
+        docs = []
+        for i, d in enumerate(docs_default):
+            docs.append(st.text_input(f"Document {i+1}", d, key=f"nlp_doc{i}"))
+        docs = [d for d in docs if d.strip()]
+
+        if len(docs) >= 2:
+            ng_exp = st.selectbox("N-gram", ["(1,1)","(1,2)"], key="nlp_ng_exp")
+            ng_v   = (1,1) if ng_exp == "(1,1)" else (1,2)
+            tv_exp = TfidfVectorizer(ngram_range=ng_v, stop_words="english")
+            X_exp  = tv_exp.fit_transform(docs).toarray()
+            fn_exp = tv_exp.get_feature_names_out()
+
+            # Heatmap
+            fig, ax = plt.subplots(figsize=(min(20, len(fn_exp)*0.5+2), len(docs)*0.8+1))
+            sns.heatmap(X_exp, xticklabels=fn_exp, yticklabels=[f"Doc {i+1}" for i in range(len(docs))],
+                        cmap="YlOrRd", ax=ax, linewidths=0.3)
+            ax.set_title("TF-IDF Matrix Heatmap", fontweight="bold")
+            plt.xticks(rotation=60, ha="right", fontsize=8)
+            fig_to_st(fig)
+
+            # Cosine similarity between documents
+            from sklearn.metrics.pairwise import cosine_similarity as cos_sim
+            sim = cos_sim(X_exp)
+            fig, ax = plt.subplots(figsize=(5, 4))
+            sns.heatmap(sim, annot=True, fmt=".2f",
+                        xticklabels=[f"D{i+1}" for i in range(len(docs))],
+                        yticklabels=[f"D{i+1}" for i in range(len(docs))],
+                        cmap="Blues", ax=ax, vmin=0, vmax=1)
+            ax.set_title("Document Cosine Similarity")
+            fig_to_st(fig)
+
+    st.info("**Key concept:** TF-IDF rewards terms that are frequent in one document but rare "
+            "across the corpus — much better than raw counts for distinguishing topics.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPUTER VISION PAGE
+# ══════════════════════════════════════════════════════════════════════════════
+def page_computer_vision():
+    import warnings; warnings.filterwarnings("ignore")
+    from skimage.feature import hog as sk_hog
+    from skimage.filters import sobel as sk_sobel
+    from skimage.color import rgb2gray as sk_rgb2gray
+    from skimage.transform import resize as sk_rz
+    from sklearn.svm import SVC
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.pipeline import Pipeline
+    from sklearn.metrics import accuracy_score
+    from scipy.ndimage import rotate as nd_rotate
+    tf2, keras2, layers2, _ = _tf()
+
+    CIFAR_NAMES = ["airplane","automobile","bird","cat","deer",
+                   "dog","frog","horse","ship","truck"]
+
+    @st.cache_data
+    def _load_cifar(n_tr, n_te):
+        (X_tr, y_tr),(X_te, y_te) = keras2.datasets.cifar10.load_data()
+        return (X_tr[:n_tr].astype(np.float32)/255., y_tr[:n_tr].flatten(),
+                X_te[:n_te].astype(np.float32)/255., y_te[:n_te].flatten())
+
+    st.title("🖼️ Computer Vision")
+    st.markdown("Augmentation, classical features, CNN training, and transfer learning on CIFAR-10.")
+
+    tab_aug, tab_feat, tab_cnn, tab_tl = st.tabs([
+        "🎨 Augmentation", "🔍 Feature Extraction", "🧠 CNN Training", "⚡ Transfer Learning"
+    ])
+
+    # ── Augmentation tab ──────────────────────────────────────────────────────
+    with tab_aug:
+        st.subheader("Image Augmentation Effects")
+        c1, c2 = st.columns(2)
+        cls_sel   = c1.selectbox("Image class", CIFAR_NAMES, key="cv_cls")
+        n_samples = c2.slider("Samples to show", 1, 8, 4, key="cv_ns")
+
+        with st.spinner("Loading CIFAR-10 …"):
+            X_tr, y_tr, X_te, y_te = _load_cifar(8000, 2000)
+
+        cls_idx = CIFAR_NAMES.index(cls_sel)
+        idxs    = np.where(y_tr == cls_idx)[0][:n_samples]
+        imgs    = X_tr[idxs]
+
+        rot_deg   = st.slider("Rotation (°)",    0, 45, 20, key="cv_rot")
+        bright    = st.slider("Brightness mult", 0.5, 2.0, 1.4, 0.1, key="cv_br")
+        flip_h    = st.checkbox("Horizontal flip", True, key="cv_fh")
+        flip_v    = st.checkbox("Vertical flip",   False, key="cv_fv")
+
+        def aug_img(img):
+            variants = {"Original": img}
+            if flip_h:  variants["H-Flip"]  = img[:, ::-1, :]
+            if flip_v:  variants["V-Flip"]  = img[::-1, :, :]
+            if rot_deg: variants[f"Rot {rot_deg}°"] = np.clip(nd_rotate(img, rot_deg, reshape=False),0,1)
+            variants[f"Bright×{bright}"] = np.clip(img * bright, 0, 1)
+            variants["Grayscale"]  = np.stack([sk_rgb2gray(img)]*3, axis=-1)
+            return variants
+
+        for img in imgs:
+            variants = aug_img(img)
+            fig, axes = plt.subplots(1, len(variants), figsize=(len(variants)*2, 2.2))
+            for ax, (name, v) in zip(axes, variants.items()):
+                ax.imshow(np.clip(v, 0, 1)); ax.axis("off"); ax.set_title(name, fontsize=7)
+            fig_to_st(fig)
+
+    # ── Feature Extraction tab ────────────────────────────────────────────────
+    with tab_feat:
+        st.subheader("Classical Feature Extraction")
+        with st.spinner("Loading CIFAR-10 …"):
+            X_tr, y_tr, X_te, y_te = _load_cifar(8000, 2000)
+
+        c1, c2 = st.columns(2)
+        feat_type  = c1.selectbox("Feature type", ["HOG","Color Histogram","HOG + Color"], key="cv_ft")
+        svm_c      = c2.select_slider("SVM C", [0.1, 1, 5, 10, 50], value=10, key="cv_c")
+        show_vis   = st.checkbox("Show HOG / edge visualisation", True, key="cv_vis")
+
+        # Visualisation
+        if show_vis:
+            vis_cls = st.selectbox("Visualise class", CIFAR_NAMES, index=1, key="cv_vcls")
+            idx_vis = np.where(y_tr == CIFAR_NAMES.index(vis_cls))[0][0]
+            img_vis = X_tr[idx_vis]
+            gray_vis = sk_rgb2gray(img_vis)
+            fd_vis, hog_vis = sk_hog(img_vis, orientations=8, pixels_per_cell=(4,4),
+                                     cells_per_block=(2,2), channel_axis=-1, visualize=True)
+            edges_vis = sk_sobel(gray_vis)
+
+            fig, axes = plt.subplots(1, 4, figsize=(14, 3.5))
+            axes[0].imshow(img_vis); axes[0].set_title("Original"); axes[0].axis("off")
+            axes[1].imshow(gray_vis, cmap="gray"); axes[1].set_title("Grayscale"); axes[1].axis("off")
+            axes[2].imshow(hog_vis, cmap="gray"); axes[2].set_title("HOG"); axes[2].axis("off")
+            axes[3].imshow(edges_vis, cmap="gray"); axes[3].set_title("Sobel Edges"); axes[3].axis("off")
+            plt.suptitle(f"Feature Visualisation — {vis_cls}", fontweight="bold")
+            fig_to_st(fig)
+
+        if st.button("🚀 Extract Features & Train SVM", key="cv_svm"):
+            def hog_feats(X):
+                return np.array([sk_hog(img, orientations=8, pixels_per_cell=(4,4),
+                                        cells_per_block=(2,2), channel_axis=-1) for img in X])
+            def col_feats(X, bins=32):
+                return np.array([np.concatenate([np.histogram(X[i,:,:,c], bins=bins,
+                                                  range=(0,1))[0] for c in range(3)])
+                                 for i in range(len(X))], dtype=np.float32)
+
+            with st.spinner("Extracting HOG …"):
+                H_tr = hog_feats(X_tr); H_te = hog_feats(X_te)
+            with st.spinner("Extracting color histograms …"):
+                C_tr = col_feats(X_tr); C_te = col_feats(X_te)
+
+            feat_map = {
+                "HOG":             (H_tr, H_te),
+                "Color Histogram": (C_tr, C_te),
+                "HOG + Color":     (np.hstack([H_tr, C_tr]), np.hstack([H_te, C_te])),
+            }
+            Ftr, Fte = feat_map[feat_type]
+
+            with st.spinner("Training SVM …"):
+                clf = Pipeline([("sc", StandardScaler()),
+                                ("svm", SVC(kernel="rbf", C=svm_c, gamma="scale"))])
+                clf.fit(Ftr, y_tr)
+                acc = accuracy_score(y_te, clf.predict(Fte))
+
+            show_metrics({"Test Accuracy": f"{acc:.4f}", "Feature dim": str(Ftr.shape[1]),
+                          "Classifier": f"SVM (C={svm_c})"})
+
+            # Per-class accuracy
+            y_pred_svm = clf.predict(Fte)
+            per_cls = [(CIFAR_NAMES[c], accuracy_score(y_te[y_te==c], y_pred_svm[y_te==c]))
+                       for c in range(10)]
+            fig, ax = plt.subplots(figsize=(10, 3))
+            names_c, accs_c = zip(*per_cls)
+            bars = ax.bar(names_c, accs_c, color=[PALETTE[i%10] for i in range(10)])
+            ax.bar_label(bars, fmt="%.3f", fontsize=7)
+            ax.set_title(f"{feat_type} + SVM — Per-class Accuracy"); ax.set_ylim(0, 1.15)
+            plt.xticks(rotation=30, ha="right"); fig_to_st(fig)
+
+    # ── CNN Training tab ──────────────────────────────────────────────────────
+    with tab_cnn:
+        st.subheader("CNN Training on CIFAR-10")
+        c1, c2, c3 = st.columns(3)
+        n_tr    = c1.select_slider("Training samples",[2000,4000,6000,8000,10000],value=6000,key="cv_ntr")
+        filters1= c2.select_slider("Conv block-1 filters",[16,32,64],value=32,key="cv_cf1")
+        filters2= c3.select_slider("Conv block-2 filters",[32,64,128],value=64,key="cv_cf2")
+        dropout = c1.slider("Dropout",0.1,0.5,0.4,0.05,key="cv_drop")
+        epochs  = c2.slider("Epochs",3,20,10,key="cv_ep")
+        aug_on  = c3.checkbox("Data augmentation",True,key="cv_aug")
+
+        if st.button("🚀 Train CNN", key="cv_cnn"):
+            with st.spinner("Loading data …"):
+                X_tr, y_tr, X_te, y_te = _load_cifar(n_tr, 2000)
+
+            keras2.backend.clear_session()
+            inp = keras2.Input(shape=(32,32,3))
+            x   = inp
+            if aug_on:
+                x = layers2.RandomFlip("horizontal")(x)
+                x = layers2.RandomRotation(0.1)(x)
+                x = layers2.RandomZoom(0.1)(x)
+            for f in (filters1, filters2):
+                x = layers2.Conv2D(f, 3, padding="same", activation="relu")(x)
+                x = layers2.BatchNormalization()(x)
+                x = layers2.Conv2D(f, 3, padding="same", activation="relu")(x)
+                x = layers2.MaxPooling2D(2)(x)
+                x = layers2.Dropout(0.25)(x)
+            x   = layers2.GlobalAveragePooling2D()(x)
+            x   = layers2.Dense(256, activation="relu")(x)
+            x   = layers2.Dropout(dropout)(x)
+            out = layers2.Dense(10, activation="softmax")(x)
+            model = keras2.Model(inp, out, name="CNN_CIFAR")
+            model.compile(optimizer=keras2.optimizers.Adam(1e-3),
+                          loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+
+            st.markdown("**Architecture**"); st.markdown(_arch_md(model))
+
+            bar = st.progress(0); status = st.empty()
+            es  = keras2.callbacks.EarlyStopping(patience=5, restore_best_weights=True, verbose=0)
+            rlr = keras2.callbacks.ReduceLROnPlateau(patience=3, factor=0.5, verbose=0)
+            history = model.fit(X_tr, y_tr, epochs=epochs, batch_size=128,
+                                validation_split=0.15, verbose=0,
+                                callbacks=[_keras_progress_cb(epochs, bar, status), es, rlr])
+            bar.empty(); status.empty()
+
+            y_pred = np.argmax(model.predict(X_te, verbose=0), axis=1)
+            acc    = accuracy_score(y_te, y_pred)
+            show_metrics({"Test Accuracy": f"{acc:.4f}",
+                          "Val Accuracy":  f"{history.history['val_accuracy'][-1]:.4f}",
+                          "Params":        f"{model.count_params():,}"})
+
+            col1, col2 = st.columns(2)
+            with col1:
+                _plot_history_st(history, "CNN CIFAR-10")
+            with col2:
+                cm_v = confusion_matrix(y_te, y_pred)
+                fig, ax = plt.subplots(figsize=(6,5))
+                ConfusionMatrixDisplay(cm_v, display_labels=CIFAR_NAMES).plot(
+                    ax=ax, colorbar=False, cmap="Oranges", xticks_rotation=45)
+                fig_to_st(fig)
+
+            # Sample predictions
+            st.subheader("Sample Predictions")
+            wrong = np.where(y_te != y_pred)[0]
+            right = np.where(y_te == y_pred)[0]
+            idxs  = list(right[:6]) + list(wrong[:6])
+            fig, axes = plt.subplots(2, 6, figsize=(14, 5))
+            axes = axes.flatten()
+            for ax, idx in zip(axes, idxs):
+                ax.imshow(X_te[idx]); ax.axis("off")
+                color = "green" if y_te[idx]==y_pred[idx] else "red"
+                ax.set_title(f"T:{CIFAR_NAMES[y_te[idx]]}\nP:{CIFAR_NAMES[y_pred[idx]]}",
+                             color=color, fontsize=6)
+            plt.suptitle("Top row: Correct  |  Bottom row: Mistakes")
+            fig_to_st(fig)
+            keras2.backend.clear_session()
+
+        else:
+            st.info("👆 Set parameters and click **Train CNN**.")
+
+    # ── Transfer Learning tab ─────────────────────────────────────────────────
+    with tab_tl:
+        st.subheader("Transfer Learning — MobileNetV2")
+        st.markdown(
+            "Use a MobileNetV2 backbone pre-trained on ImageNet. "
+            "Freeze the backbone, add a small classification head, and train only the head."
+        )
+        c1, c2 = st.columns(2)
+        n_tl   = c1.select_slider("Samples", [1000,2000,3000,4000], value=2000, key="cv_ntl")
+        tl_ep  = c2.slider("Head epochs", 3, 15, 6, key="cv_tlep")
+        unfreeze= c1.checkbox("Unfreeze top 20 layers (fine-tune)", False, key="cv_uf")
+
+        if st.button("🚀 Run Transfer Learning", key="cv_tl"):
+            with st.spinner("Loading CIFAR-10 …"):
+                X_tr, y_tr, X_te, y_te = _load_cifar(n_tl, 1000)
+            target = (96, 96)
+            with st.spinner("Resizing images to 96×96 …"):
+                X_tr_r = np.array([sk_rz(img, target, anti_aliasing=True) for img in X_tr], dtype=np.float32)
+                X_te_r = np.array([sk_rz(img, target, anti_aliasing=True) for img in X_te], dtype=np.float32)
+
+            keras2.backend.clear_session()
+            with st.spinner("Loading MobileNetV2 (ImageNet weights) …"):
+                base = keras2.applications.MobileNetV2(
+                    input_shape=(*target,3), include_top=False, weights="imagenet", pooling="avg")
+                base.trainable = False
+                if unfreeze:
+                    for layer in base.layers[-20:]:
+                        layer.trainable = True
+
+            inp   = keras2.Input(shape=(*target,3))
+            x     = keras2.applications.mobilenet_v2.preprocess_input(inp * 255)
+            x     = base(x, training=False)
+            x     = layers2.Dense(128, activation="relu")(x)
+            x     = layers2.Dropout(0.3)(x)
+            out   = layers2.Dense(10, activation="softmax")(x)
+            model = keras2.Model(inp, out, name="TL_MobileNetV2")
+            model.compile(optimizer=keras2.optimizers.Adam(1e-3 if not unfreeze else 5e-5),
+                          loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+
+            show_metrics({"Trainable params": f"{sum(np.prod(w.shape) for w in model.trainable_weights):,}",
+                          "Frozen params":    f"{sum(np.prod(w.shape) for w in model.non_trainable_weights):,}",
+                          "Fine-tune":        str(unfreeze)})
+
+            bar = st.progress(0); status = st.empty()
+            history = model.fit(X_tr_r, y_tr, epochs=tl_ep, batch_size=64,
+                                validation_split=0.15, verbose=0,
+                                callbacks=[_keras_progress_cb(tl_ep, bar, status)])
+            bar.empty(); status.empty()
+
+            y_pred = np.argmax(model.predict(X_te_r, verbose=0), axis=1)
+            acc = accuracy_score(y_te, y_pred)
+            show_metrics({"Test Accuracy":  f"{acc:.4f}",
+                          "Val Accuracy":   f"{history.history['val_accuracy'][-1]:.4f}"})
+
+            _plot_history_st(history, "Transfer Learning (MobileNetV2)")
+            keras2.backend.clear_session()
+        else:
+            st.info("👆 Click **Run Transfer Learning** to start.")
+
+    st.info("**Key concept:** Transfer learning adapts a model trained on millions of images "
+            "to your task — even 1–2k labelled images often outperform a CNN trained from scratch.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RECOMMENDATIONS PAGE
+# ══════════════════════════════════════════════════════════════════════════════
+def page_recommendations():
+    from sklearn.metrics.pairwise import cosine_similarity as cos_sim
+    from sklearn.decomposition import TruncatedSVD
+
+    st.title("🎬 Recommendation Systems")
+    st.markdown("User-Based CF, Item-Based CF, Matrix Factorisation, and Content-Based Filtering "
+                "on a synthetic movie-rating dataset.")
+
+    GENRES = ["Action","Comedy","Drama","Sci-Fi","Romance","Thriller","Horror","Animation"]
+
+    @st.cache_data
+    def _make_data(n_users, n_items, sparsity, seed):
+        rng = np.random.default_rng(seed)
+        U = rng.standard_normal((n_users, 8))
+        V = rng.standard_normal((n_items, 8))
+        base = U @ V.T
+        base = (base - base.min()) / (base.max() - base.min()) * 4 + 1
+        base += 0.3 * rng.standard_normal(base.shape)
+        base = np.clip(np.round(base), 1, 5)
+        mask = rng.random((n_users, n_items)) > sparsity
+        ratings = np.where(mask, base, np.nan)
+        n_genres = len(GENRES)
+        feat = np.zeros((n_items, n_genres))
+        prim = rng.integers(0, n_genres, n_items)
+        sec  = (prim + rng.integers(1, n_genres, n_items)) % n_genres
+        for i,(p,s) in enumerate(zip(prim,sec)):
+            feat[i,p]=1.; feat[i,s]=0.5
+        items_df = pd.DataFrame(feat, columns=GENRES,
+                                index=[f"Movie_{i:03d}" for i in range(n_items)])
+        users_l  = [f"User_{i:03d}" for i in range(n_users)]
+        R = pd.DataFrame(ratings, index=users_l, columns=items_df.index)
+        return R, items_df
+
+    # Sidebar-style controls at the top
+    with st.expander("⚙️ Dataset Settings", expanded=False):
+        c1, c2, c3, c4 = st.columns(4)
+        n_users   = c1.slider("Users",   50, 300, 120, key="rec_nu")
+        n_items   = c2.slider("Items",   20, 150,  60, key="rec_ni")
+        sparsity  = c3.slider("Sparsity (fraction missing)", 0.3, 0.85, 0.65, 0.05, key="rec_sp")
+        seed      = c4.slider("Random seed", 1, 99, 42, key="rec_seed")
+
+    R, items_df = _make_data(n_users, n_items, sparsity, seed)
+    rated        = int(R.notna().sum().sum())
+    total        = n_users * n_items
+    density      = rated / total
+
+    tab_exp, tab_ub, tab_ib, tab_svd, tab_cb, tab_eval = st.tabs([
+        "📊 Dataset", "👥 User-Based CF", "🎬 Item-Based CF",
+        "🔢 Matrix Factorisation", "🏷️ Content-Based", "📈 Evaluation"
+    ])
+
+    # ── Dataset tab ───────────────────────────────────────────────────────────
+    with tab_exp:
+        show_metrics({"Users": str(n_users), "Items": str(n_items),
+                      "Rated pairs": str(rated),
+                      "Density": f"{density*100:.1f}%",
+                      "Avg rating": f"{R.stack().mean():.2f}"})
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Rating Matrix (first 25×25)")
+            vis = R.fillna(0).values[:25, :25]
+            fig, ax = plt.subplots(figsize=(7, 5))
+            im = ax.imshow(vis, cmap="YlOrRd", aspect="auto", vmin=0, vmax=5)
+            plt.colorbar(im, ax=ax, label="Rating  (0 = unrated)")
+            ax.set_xlabel("Items"); ax.set_ylabel("Users")
+            ax.set_title("Rating Heatmap"); fig_to_st(fig)
+
+        with col2:
+            st.subheader("Rating Distribution")
+            vals = R.stack().values
+            fig, ax = plt.subplots(figsize=(7, 5))
+            ax.hist(vals, bins=[0.5,1.5,2.5,3.5,4.5,5.5],
+                    color=PALETTE[0], edgecolor="white", rwidth=0.8)
+            ax.set_xlabel("Rating"); ax.set_ylabel("Count")
+            ax.set_title("Distribution of Ratings"); fig_to_st(fig)
+
+        # Genre distribution
+        dominant_genre = items_df.idxmax(axis=1).value_counts()
+        fig, ax = plt.subplots(figsize=(10, 3))
+        ax.bar(dominant_genre.index, dominant_genre.values,
+               color=[PALETTE[i%10] for i in range(len(dominant_genre))])
+        ax.set_title("Item Genre Distribution"); ax.set_ylabel("Count")
+        plt.xticks(rotation=30, ha="right"); fig_to_st(fig)
+
+    # ── User-Based CF tab ─────────────────────────────────────────────────────
+    with tab_ub:
+        st.subheader("User-Based Collaborative Filtering")
+        st.markdown("*'Users who rated items similarly to you also liked …'*")
+        c1, c2 = st.columns(2)
+        k_nb   = c1.slider("k neighbours", 3, 30, 15, key="rec_ub_k")
+        sel_u  = c2.selectbox("Select user", R.index.tolist(), key="rec_sel_u")
+        top_n_ub = st.slider("Top-N recommendations", 5, 20, 10, key="rec_ub_n")
+
+        # Compute mean-centred matrix & similarity
+        mean_u  = R.mean(axis=1)
+        R_c     = R.subtract(mean_u, axis=0).fillna(0)
+        U_sim   = pd.DataFrame(cos_sim(R_c.values), index=R.index, columns=R.index)
+
+        # Recommend for selected user
+        def _ub_predict(user, item):
+            sims  = U_sim[user].drop(user)
+            rated = ~R[item].isna()
+            peers = sims[rated].nlargest(k_nb)
+            if len(peers) == 0: return mean_u[user]
+            num = (peers * (R.loc[peers.index, item] - mean_u[peers.index])).sum()
+            return np.clip(mean_u[user] + num / (peers.abs().sum() + 1e-9), 1, 5)
+
+        unrated  = R.columns[R.loc[sel_u].isna()]
+        rec_scores = {item: _ub_predict(sel_u, item) for item in unrated}
+        top_recs   = sorted(rec_scores.items(), key=lambda x: x[1], reverse=True)[:top_n_ub]
+
+        col1, col2 = st.columns(2)
+        with col1:
+            # User similarity heatmap (top 15 users)
+            top_sim = U_sim[sel_u].drop(sel_u).nlargest(15)
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.barh(top_sim.index[::-1], top_sim.values[::-1], color=PALETTE[0])
+            ax.set_title(f"Top 15 Similar Users to {sel_u}"); ax.set_xlabel("Cosine similarity")
+            fig_to_st(fig)
+
+        with col2:
+            st.subheader(f"Top-{top_n_ub} Recommendations")
+            recs_df = pd.DataFrame(top_recs, columns=["Movie", "Predicted Rating"])
+            recs_df["Predicted Rating"] = recs_df["Predicted Rating"].round(2)
+            recs_df["Genre"] = recs_df["Movie"].apply(
+                lambda m: items_df.loc[m].nlargest(1).index[0])
+            st.dataframe(recs_df, use_container_width=True)
+
+        # Recommendation bar chart
+        items_r, scores_r = zip(*top_recs)
+        fig, ax = plt.subplots(figsize=(10, 3.5))
+        ax.barh(items_r[::-1], scores_r[::-1], color=PALETTE[1])
+        ax.set_xlabel("Predicted Rating"); ax.set_title(f"User-CF Recommendations for {sel_u}")
+        ax.axvline(3.5, color="red", ls="--", label="Good threshold"); ax.legend()
+        fig_to_st(fig)
+
+    # ── Item-Based CF tab ─────────────────────────────────────────────────────
+    with tab_ib:
+        st.subheader("Item-Based Collaborative Filtering")
+        st.markdown("*'Because you liked X, you might enjoy Y …'*")
+        c1, c2 = st.columns(2)
+        k_items = c1.slider("k similar items", 5, 30, 20, key="rec_ib_k")
+        sel_itm = c2.selectbox("Anchor item (explore similar)", R.columns.tolist(), key="rec_sel_itm")
+        sel_u_ib= st.selectbox("User for personalised recs", R.index.tolist(), key="rec_ib_u")
+        top_n_ib= st.slider("Top-N", 5, 20, 10, key="rec_ib_n")
+
+        # Adjusted cosine item similarity
+        R_adj   = R.subtract(R.mean(axis=1), axis=0).fillna(0)
+        I_sim   = pd.DataFrame(cos_sim(R_adj.T.values), index=R.columns, columns=R.columns)
+
+        sim_items = I_sim[sel_itm].drop(sel_itm).nlargest(10)
+        col1, col2 = st.columns(2)
+        with col1:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.barh(sim_items.index[::-1], sim_items.values[::-1], color=PALETTE[2])
+            ax.set_title(f"Items Most Similar to {sel_itm}")
+            ax.set_xlabel("Adjusted Cosine Similarity"); fig_to_st(fig)
+
+        # Personalised recs for user
+        def _ib_predict(user, item):
+            user_rated = R.loc[user].dropna()
+            if item in user_rated: return user_rated[item]
+            common = I_sim[item][user_rated.index].nlargest(k_items)
+            if len(common) == 0: return R[item].mean()
+            return np.clip((common * user_rated[common.index]).sum() /
+                           (common.abs().sum() + 1e-9), 1, 5)
+
+        unrated_ib  = R.columns[R.loc[sel_u_ib].isna()]
+        recs_ib     = sorted({item: _ib_predict(sel_u_ib, item)
+                               for item in unrated_ib}.items(),
+                              key=lambda x: x[1], reverse=True)[:top_n_ib]
+        with col2:
+            st.subheader(f"Top-{top_n_ib} for {sel_u_ib}")
+            ib_df = pd.DataFrame(recs_ib, columns=["Movie","Predicted Rating"])
+            ib_df["Predicted Rating"] = ib_df["Predicted Rating"].round(2)
+            ib_df["Genre"] = ib_df["Movie"].apply(lambda m: items_df.loc[m].nlargest(1).index[0])
+            st.dataframe(ib_df, use_container_width=True)
+
+    # ── Matrix Factorisation tab ───────────────────────────────────────────────
+    with tab_svd:
+        st.subheader("Matrix Factorisation — Truncated SVD")
+        st.markdown("Decompose the rating matrix into latent user and item factors.")
+        c1, c2 = st.columns(2)
+        n_comp  = c1.slider("SVD rank (n_components)", 2, min(40, min(n_users,n_items)-1), 15, key="rec_svd_k")
+        svd_u   = c2.selectbox("User for recs", R.index.tolist(), key="rec_svd_u")
+
+        mean_all = float(R.stack().mean())
+        R_fill   = R.fillna(mean_all).values
+        svd      = TruncatedSVD(n_components=n_comp, random_state=42)
+        U_svd    = svd.fit_transform(R_fill)
+        R_hat    = pd.DataFrame(np.clip(U_svd @ svd.components_, 1, 5),
+                                index=R.index, columns=R.columns)
+
+        ev = svd.explained_variance_ratio_.sum()
+        show_metrics({"SVD rank": str(n_comp),
+                      "Explained variance": f"{ev*100:.1f}%",
+                      "Reconstruction error": f"{np.sqrt(((R_fill - R_hat.values)**2).mean()):.4f}"})
+
+        col1, col2 = st.columns(2)
+        with col1:
+            # Explained variance by component
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.bar(range(1, n_comp+1), svd.explained_variance_ratio_ * 100, color=PALETTE[0])
+            ax.set_xlabel("Component"); ax.set_ylabel("Variance explained (%)")
+            ax.set_title("SVD — Variance per Component"); fig_to_st(fig)
+
+        with col2:
+            unrated_svd = R.columns[R.loc[svd_u].isna()]
+            svd_scores  = {item: float(R_hat.loc[svd_u, item]) for item in unrated_svd}
+            top_svd     = sorted(svd_scores.items(), key=lambda x: x[1], reverse=True)[:10]
+            st.subheader(f"Top-10 SVD Recs for {svd_u}")
+            svd_df = pd.DataFrame(top_svd, columns=["Movie","Predicted Rating"])
+            svd_df["Predicted Rating"] = svd_df["Predicted Rating"].round(2)
+            svd_df["Genre"] = svd_df["Movie"].apply(lambda m: items_df.loc[m].nlargest(1).index[0])
+            st.dataframe(svd_df, use_container_width=True)
+
+        # Rank sweep
+        with st.expander("Reconstruction Error vs SVD Rank"):
+            ranks = list(range(2, min(41, min(n_users, n_items)-1), 4))
+            errors = []
+            for r in ranks:
+                s = TruncatedSVD(n_components=r, random_state=42)
+                Uh = s.fit_transform(R_fill)
+                errors.append(np.sqrt(((R_fill - Uh @ s.components_)**2).mean()))
+            fig, ax = plt.subplots(figsize=(8, 3.5))
+            ax.plot(ranks, errors, "o-", color=PALETTE[3])
+            ax.axvline(n_comp, color="red", ls="--", label=f"Selected k={n_comp}")
+            ax.set_xlabel("SVD rank k"); ax.set_ylabel("RMSE (on all cells)")
+            ax.set_title("Reconstruction Error vs Rank"); ax.legend()
+            fig_to_st(fig)
+
+    # ── Content-Based tab ─────────────────────────────────────────────────────
+    with tab_cb:
+        st.subheader("Content-Based Filtering")
+        st.markdown("Recommend items whose *features* are most similar to what the user has liked.")
+        c1, c2 = st.columns(2)
+        sel_u_cb = c1.selectbox("User", R.index.tolist(), key="rec_cb_u")
+        top_n_cb = c2.slider("Top-N", 5, 20, 10, key="rec_cb_n")
+
+        # Item feature similarity
+        feat_sim = pd.DataFrame(cos_sim(items_df.values), index=items_df.index, columns=items_df.index)
+
+        def cb_recommend(user):
+            rated_u = R.loc[user].dropna()
+            if len(rated_u) == 0: return []
+            # User profile = weighted average of item features
+            profile = (items_df.loc[rated_u.index].T * rated_u.values).T.mean()
+            unrated = R.columns[R.loc[user].isna()]
+            scores  = {}
+            for item in unrated:
+                iv   = items_df.loc[item].values
+                num  = (profile.values * iv).sum()
+                den  = (np.linalg.norm(profile) * np.linalg.norm(iv)) + 1e-9
+                scores[item] = np.clip(num/den * 4 + 1, 1, 5)
+            return sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_n_cb]
+
+        user_profile = (items_df.loc[R.loc[sel_u_cb].dropna().index].T
+                        * R.loc[sel_u_cb].dropna().values).T.mean()
+        cb_recs = cb_recommend(sel_u_cb)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader(f"User Profile — {sel_u_cb}")
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.bar(GENRES, user_profile.values, color=[PALETTE[i%10] for i in range(len(GENRES))])
+            ax.set_title("Genre Preference Profile"); ax.set_ylabel("Weight")
+            plt.xticks(rotation=30, ha="right"); fig_to_st(fig)
+
+        with col2:
+            st.subheader(f"Top-{top_n_cb} Content-Based Recs")
+            cb_df = pd.DataFrame(cb_recs, columns=["Movie","Score"])
+            cb_df["Score"] = cb_df["Score"].round(3)
+            cb_df["Genre"] = cb_df["Movie"].apply(lambda m: items_df.loc[m].nlargest(1).index[0])
+            st.dataframe(cb_df, use_container_width=True)
+
+    # ── Evaluation tab ─────────────────────────────────────────────────────────
+    with tab_eval:
+        st.subheader("Model Comparison — Evaluation Metrics")
+        c1, c2 = st.columns(2)
+        k_eval     = c1.slider("@K for Precision/Recall", 5, 20, 10, key="rec_k")
+        threshold  = c2.slider("'Good' rating threshold", 3.0, 4.5, 3.5, 0.5, key="rec_thr")
+
+        if st.button("🚀 Evaluate All Models", key="rec_eval"):
+            # Train/test split
+            rng = np.random.default_rng(42)
+            known = [(u, i) for u in R.index for i in R.columns if not pd.isna(R.loc[u, i])]
+            rng.shuffle(known)
+            te_pairs = known[:int(len(known)*0.2)]
+            R_tr = R.copy()
+            R_te = {(u,i): R.loc[u,i] for u,i in te_pairs}
+            for u, i in te_pairs: R_tr.loc[u,i] = np.nan
+
+            # User-CF
+            mean_u2 = R_tr.mean(axis=1)
+            R_c2    = R_tr.subtract(mean_u2, axis=0).fillna(0)
+            U_sim2  = pd.DataFrame(cos_sim(R_c2.values), index=R.index, columns=R.index)
+            def ub_pred2(u, item):
+                sims = U_sim2[u].drop(u); rated = ~R_tr[item].isna()
+                peers = sims[rated].nlargest(15)
+                if len(peers)==0: return mean_u2[u]
+                num = (peers*(R_tr.loc[peers.index,item]-mean_u2[peers.index])).sum()
+                return np.clip(mean_u2[u]+num/(peers.abs().sum()+1e-9),1,5)
+
+            # Item-CF
+            R_adj2  = R_tr.subtract(R_tr.mean(axis=1),axis=0).fillna(0)
+            I_sim2  = pd.DataFrame(cos_sim(R_adj2.T.values), index=R.columns, columns=R.columns)
+            def ib_pred2(u, item):
+                ur = R_tr.loc[u].dropna()
+                if item in ur: return ur[item]
+                common = I_sim2[item][ur.index].nlargest(20)
+                if len(common)==0: return R_tr[item].mean()
+                return np.clip((common*ur[common.index]).sum()/(common.abs().sum()+1e-9),1,5)
+
+            # SVD
+            mean_a2 = float(R_tr.stack().mean())
+            R_f2    = R_tr.fillna(mean_a2).values
+            svd2    = TruncatedSVD(n_components=20, random_state=42)
+            Uh2     = svd2.fit_transform(R_f2)
+            R_hat2  = pd.DataFrame(np.clip(Uh2@svd2.components_,1,5), index=R.index, columns=R.columns)
+            def svd_pred2(u, item): return float(R_hat2.loc[u, item])
+
+            # Content-based
+            def cb_pred2(u, item):
+                ur = R_tr.loc[u].dropna()
+                if len(ur)==0: return 3.0
+                prof = (items_df.loc[ur.index].T * ur.values).T.mean()
+                iv   = items_df.loc[item].values
+                sim  = (prof.values * iv).sum() / (np.linalg.norm(prof)*np.linalg.norm(iv)+1e-9)
+                return np.clip(sim*4+1,1,5)
+
+            models_eval = {"User-CF": ub_pred2, "Item-CF": ib_pred2,
+                           "SVD": svd_pred2, "Content-Based": cb_pred2}
+
+            def rmse_fn(pred_fn):
+                errs = [(R_te[(u,i)] - pred_fn(u,i))**2 for (u,i) in R_te]
+                return float(np.sqrt(np.mean(errs)))
+
+            def prec_rec(top_n_fn):
+                precs, recs_l = [], []
+                for user in R.index:
+                    relevant = set(R.columns[(R.loc[user] >= threshold) & R.loc[user].notna()])
+                    if not relevant: continue
+                    top = [item for item,_ in top_n_fn(user, n=k_eval)]
+                    hits = len(set(top) & relevant)
+                    precs.append(hits / k_eval)
+                    recs_l.append(hits / len(relevant))
+                return float(np.mean(precs)), float(np.mean(recs_l))
+
+            def ub_topn(u, n=10):
+                unr = R_tr.columns[R_tr.loc[u].isna()]
+                return sorted({i: ub_pred2(u,i) for i in unr}.items(), key=lambda x:-x[1])[:n]
+            def ib_topn(u, n=10):
+                unr = R_tr.columns[R_tr.loc[u].isna()]
+                return sorted({i: ib_pred2(u,i) for i in unr}.items(), key=lambda x:-x[1])[:n]
+            def svd_topn(u, n=10):
+                unr = R.columns[R_tr.loc[u].isna()]
+                return sorted({i: svd_pred2(u,i) for i in unr}.items(), key=lambda x:-x[1])[:n]
+            def cb_topn(u, n=10):
+                unr = R_tr.columns[R_tr.loc[u].isna()]
+                return sorted({i: cb_pred2(u,i) for i in unr}.items(), key=lambda x:-x[1])[:n]
+
+            topn_fns = {"User-CF": ub_topn, "Item-CF": ib_topn,
+                        "SVD": svd_topn, "Content-Based": cb_topn}
+
+            rows = []
+            with st.spinner("Evaluating …"):
+                for name, pred_fn in models_eval.items():
+                    r   = rmse_fn(pred_fn)
+                    p,rc= prec_rec(topn_fns[name])
+                    rows.append({"Model": name, "RMSE": round(r,4),
+                                 f"P@{k_eval}": round(p,4), f"R@{k_eval}": round(rc,4)})
+
+            df_eval = pd.DataFrame(rows)
+            st.dataframe(df_eval, use_container_width=True)
+
+            fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+            for ax, col, color, title in zip(
+                axes,
+                ["RMSE", f"P@{k_eval}", f"R@{k_eval}"],
+                [PALETTE[0], PALETTE[1], PALETTE[2]],
+                ["RMSE (↓)", f"Precision@{k_eval} (↑)", f"Recall@{k_eval} (↑)"],
+            ):
+                vals = df_eval[col].values
+                bars = ax.bar(df_eval["Model"], vals, color=[PALETTE[i%10] for i in range(4)])
+                ax.bar_label(bars, fmt="%.4f", padding=3)
+                ax.set_title(title, fontweight="bold")
+                ax.set_xticklabels(df_eval["Model"], rotation=20, ha="right")
+                ax.set_ylim(0, max(vals)*1.2+0.05)
+            plt.suptitle("Recommendation Models — Evaluation", fontweight="bold")
+            fig_to_st(fig)
+        else:
+            st.info("👆 Click **Evaluate All Models** to compare all methods.")
+
+    st.info("**Key concept:** No single method wins — User-CF needs many users, Item-CF is "
+            "more stable, SVD captures latent taste profiles, Content-Based solves item cold-start.")
+
+
 PAGES = {
     "🏠  Home":                    page_home,
     "📈  Linear Regression":       page_linear_regression,
@@ -1753,6 +2775,9 @@ PAGES = {
     "⚡  Boosting":                page_boosting,
     "🎯  Ensemble Methods":        page_ensemble,
     "🧠  Neural Networks":         page_neural_networks,
+    "📝  NLP":                     page_nlp,
+    "🖼️  Computer Vision":         page_computer_vision,
+    "🎬  Recommendations":         page_recommendations,
 }
 
 PAGES[page]()

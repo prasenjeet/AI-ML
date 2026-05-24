@@ -1,6 +1,6 @@
 # Machine Learning Concepts — Sample Project
 
-A self-contained Python project demonstrating **eleven ML & deep learning techniques** using **scikit-learn** and **TensorFlow/Keras**. Available in two modes:
+A self-contained Python project demonstrating **fourteen ML, deep learning, and applied AI techniques** using **scikit-learn**, **TensorFlow/Keras**, **NLTK**, and **scikit-image**. Available in two modes:
 
 - **Interactive UI** — Streamlit web app with live inputs, dynamic plots, and metric cards
 - **CLI runner** — terminal script with printed results and saved PNG charts
@@ -27,6 +27,10 @@ A self-contained Python project demonstrating **eleven ML & deep learning techni
   - [CNN – Convolutional Neural Network](#9-cnn--convolutional-neural-network)
   - [RNN – Recurrent Neural Network](#10-rnn--recurrent-neural-network)
   - [LSTM – Long Short-Term Memory](#11-lstm--long-short-term-memory)
+- [Applied AI Concepts](#applied-ai-concepts)
+  - [NLP – Natural Language Processing](#12-nlp--natural-language-processing)
+  - [Computer Vision](#13-computer-vision)
+  - [Recommendation Systems](#14-recommendation-systems)
 - [Generated Plots](#generated-plots)
 - [Dependencies](#dependencies)
 
@@ -53,6 +57,13 @@ A self-contained Python project demonstrating **eleven ML & deep learning techni
 | 10 | RNN | SimpleRNN (stacked) | Synthetic time series |
 | 11 | LSTM | Stacked LSTM / GRU / Bidirectional | Synthetic time series |
 
+### Applied AI
+| # | Concept | Techniques | Dataset |
+|---|---------|-----------|---------|
+| 12 | NLP | Preprocessing, TF-IDF, Classification, Sentiment, LDA | 20 Newsgroups + custom texts |
+| 13 | Computer Vision | HOG, Augmentation, SVM, CNN, Transfer Learning | CIFAR-10 |
+| 14 | Recommendation Systems | User-CF, Item-CF, SVD, Content-Based | Synthetic ratings matrix |
+
 ---
 
 ## Project Structure
@@ -68,7 +79,7 @@ AI-ML/
     ├── utils/
     │   ├── data_generator.py        # sklearn dataset helpers
     │   ├── visualizer.py            # Classical ML plot helpers
-    │   └── nn_utils.py              # ★ Neural Network data & plot helpers
+    │   └── nn_utils.py              # Neural Network data & plot helpers
     └── models/
         ├── linear_regression.py
         ├── decision_tree.py
@@ -76,11 +87,14 @@ AI-ML/
         ├── bagging_random_forest.py
         ├── boosting.py
         ├── ensemble.py
-        ├── ann.py                   # ★ ANN demo
-        ├── dnn.py                   # ★ DNN demo
-        ├── cnn.py                   # ★ CNN demo (MNIST)
-        ├── rnn.py                   # ★ RNN demo
-        └── lstm.py                  # ★ LSTM / GRU demo
+        ├── ann.py                   # ANN demo
+        ├── dnn.py                   # DNN demo
+        ├── cnn.py                   # CNN demo (MNIST)
+        ├── rnn.py                   # RNN demo
+        ├── lstm.py                  # LSTM / GRU demo
+        ├── nlp.py                   # ★ NLP demo
+        ├── computer_vision.py       # ★ Computer Vision demo (CIFAR-10)
+        └── recommendations.py       # ★ Recommendation Systems demo
 ```
 
 ---
@@ -115,7 +129,7 @@ streamlit run app.py
 │  🤖 ML Concepts         │  Metric cards                           │
 │                         │                                         │
 │  Page navigation        │  Interactive plots (live update)        │
-│  (8 pages)              │                                         │
+│  (11 pages)             │                                         │
 │                         │  Expandable analysis sections           │
 │  Concept-specific       │                                         │
 │  sliders & dropdowns    │  Key concept takeaway                   │
@@ -148,6 +162,42 @@ A single page with **5 tabs** — one per architecture. Each tab has:
 | **🔁 RNN** | Seq length, units, layers, dropout, epochs, noise; compare LSTM/MLP | Training curves, Prediction vs Actual, Model RMSE comparison |
 | **⏳ LSTM** | Seq length, units, layers, dropout, bidir, epochs; compare RNN/GRU | Training curves, Prediction vs Actual, Overlay chart, Gate mechanism reference |
 
+### NLP Page (`📝 NLP`)
+
+A single page with **5 tabs** covering the full text processing pipeline.
+
+| Tab | Controls | Outputs |
+|-----|----------|---------|
+| **🔤 Preprocessing** | Custom text input | Token list, stopword-filtered tokens, stemmed, lemmatised, POS tags |
+| **🏷️ Classification** | Train size, max TF-IDF features, classifier (NB/LR/SVM) | Accuracy, confusion matrix, top feature weights |
+| **😊 Sentiment** | Custom text input | VADER compound/pos/neg/neu scores, colour-coded sentiment bars |
+| **📚 Topics (LDA)** | Number of topics, max iterations | Top-10 words per topic, perplexity score |
+| **🔍 TF-IDF Explorer** | Custom corpus (one doc per line), max features | TF-IDF heatmap, top-terms bar chart |
+
+### Computer Vision Page (`🖼️ Computer Vision`)
+
+A single page with **4 tabs** covering the CV pipeline from raw pixels to transfer learning.
+
+| Tab | Controls | Outputs |
+|-----|----------|---------|
+| **🎨 Augmentation** | Flip H/V toggles, rotation, brightness, zoom | Before/after 3-column comparison grid |
+| **🔍 Feature Extraction** | HOG orientations, pixels/cell, SVM kernel | HOG visualisation, Sobel edges, SVM accuracy (HOG vs colour hist) |
+| **🧠 CNN Training** | Filters, dropout, epochs, augmentation toggle | Training curves, confusion matrix (10 classes), sample prediction grid |
+| **🚀 Transfer Learning** | MobileNetV2 freeze/unfreeze, fine-tune epochs | Linear probe accuracy, fine-tuned accuracy, feature visualisation |
+
+### Recommendations Page (`🎬 Recommendations`)
+
+A single page with **6 tabs** covering collaborative and content-based filtering.
+
+| Tab | Controls | Outputs |
+|-----|----------|---------|
+| **📊 Dataset** | Users, items, sparsity slider | Rating matrix heatmap, density stats, genre distribution |
+| **👥 User-Based CF** | k neighbours, target user | Top-10 recommendations, similarity heatmap |
+| **🎬 Item-Based CF** | k items, target user | Top-10 recommendations, item similarity heatmap |
+| **🔢 Matrix Factorisation** | SVD components | Explained variance, latent factor heatmap, Top-10 recommendations |
+| **📝 Content-Based** | Target user | User genre profile chart, Top-10 recommendations |
+| **📈 Evaluation** | All models | RMSE, Precision@K, Recall@K comparison bar charts |
+
 ---
 
 ## CLI Runner (`main.py`)
@@ -160,17 +210,19 @@ Topics (classical ML):
 
 Topics (neural networks):
   ann | dnn | cnn | rnn | lstm
+
+Topics (applied AI):
+  nlp | cv | rec
 ```
 
 **Examples:**
 
 ```bash
-python main.py                          # All 11 concepts
+python main.py                          # All 14 concepts
+python main.py --topic nlp              # NLP only
+python main.py --topic cv               # Computer Vision only
+python main.py --topic rec              # Recommendations only
 python main.py --topic ann              # ANN only
-python main.py --topic dnn              # DNN only
-python main.py --topic cnn              # CNN (MNIST) only
-python main.py --topic rnn              # RNN only
-python main.py --topic lstm             # LSTM / GRU only
 python main.py --topic lr               # Linear Regression only
 python main.py --save-plots             # Save all charts to ./plots/
 ```
@@ -282,8 +334,6 @@ Input(n_features) → Dense(n, activation) × n_layers → Dropout → Dense(n_c
 - Hidden layer width sweep (16 → 256)
 - Dropout regularisation
 
-**Interactive UI inputs:** dataset, layers, neurons/layer, activation, optimizer, learning rate, epochs, dropout
-
 **Key concept:** ANN is a universal function approximator. ReLU avoids vanishing gradients; Adam converges faster than SGD on most problems.
 
 ---
@@ -305,8 +355,6 @@ Input → [Dense → BatchNorm → ReLU → Dropout] × n_layers → Dense(n_cla
 - Dropout rate sweep (0 → 0.5)
 - Weight initialisers: He Normal · Glorot Uniform · LeCun Normal
 - Learning rate schedulers: ReduceLROnPlateau · EarlyStopping
-
-**Interactive UI inputs:** dataset, depth, width, dropout, BatchNorm toggle, initialiser, epochs
 
 **Key concept:** BatchNorm normalises layer inputs at each mini-batch — essential for training networks deeper than ~5 layers. He initialisation is preferred for ReLU activations.
 
@@ -333,8 +381,6 @@ Input(28×28×1)
 - Learned filter visualisation (Conv1 weights)
 - Sample prediction grid (correct in green, wrong in red)
 
-**Interactive UI inputs:** training size, conv filters ×2, kernel size, dense units, dropout, epochs, GAP toggle
-
 **Key concept:** Conv layers slide filters over the image, sharing weights spatially — edge/curve detectors emerge automatically from training. MaxPooling adds translation invariance.
 
 ---
@@ -355,8 +401,6 @@ Input(seq_len, 1) → SimpleRNN(units) [× n_layers] → Dense(1)
 - Layer depth sweep (1 → 3)
 - Comparison with MLP baseline (no recurrence)
 - Vanishing gradient discussion
-
-**Interactive UI inputs:** seq length, units, layers, dropout, epochs, noise; optional LSTM/MLP comparison
 
 **Key concept:** The hidden state *h_t = f(W·x_t + U·h_{t-1})* carries information forward in time. Vanilla RNNs forget events more than ~20 steps back — the motivation for LSTM.
 
@@ -379,10 +423,6 @@ Optional: Bidirectional wrapper
 - Bidirectional LSTM (reads sequence forward + backward)
 - Dropout & recurrent_dropout sweeps
 - Sequence length sweep
-- Prediction overlay chart
-- Gate mechanism reference table
-
-**Interactive UI inputs:** seq length, units, layers, dropout, bidirectional toggle, epochs, noise; optional RNN/GRU comparison
 
 **LSTM Gate Mechanism:**
 
@@ -396,6 +436,122 @@ Optional: Bidirectional wrapper
 Cell state update: **C_t = f_t ⊙ C_{t-1} + i_t ⊙ C̃_t**
 
 **Key concept:** The cell state *C_t* is a 'conveyor belt' that can carry gradients across hundreds of steps. GRU achieves similar results with fewer parameters (2 gates instead of 3).
+
+---
+
+## Applied AI Concepts
+
+### 12. NLP – Natural Language Processing
+**File:** `ml_concepts/models/nlp.py`  
+**Datasets:** 20 Newsgroups (5 categories), custom text inputs
+
+A complete NLP pipeline from raw text to classification and topic modelling.
+
+**Pipeline stages:**
+
+```
+Raw Text
+  → Tokenisation (NLTK word_tokenize)
+  → Stopword Removal (NLTK stopwords corpus)
+  → Stemming (PorterStemmer)  /  Lemmatisation (WordNetLemmatizer)
+  → POS Tagging (NLTK averaged_perceptron_tagger)
+  → TF-IDF Vectorisation
+  → Classification / Sentiment / Topic Modelling
+```
+
+**What's explored:**
+
+| Demo | Technique | Detail |
+|------|-----------|--------|
+| Preprocessing | Tokenise → stem → lemmatise → POS tag | Side-by-side comparison of each step |
+| Classification | TF-IDF + ComplementNB / LogReg / LinearSVC | 20 Newsgroups (sci.med, sci.space, baseball, politics, comp) |
+| Sentiment | VADER (Valence Aware Dictionary) | compound / positive / negative / neutral scores |
+| Topic Modelling | LDA (Latent Dirichlet Allocation) | Top-10 words per topic, perplexity |
+| TF-IDF Explorer | Custom corpus | Term importance heatmap, top-terms bar |
+
+**Key concept:** TF-IDF down-weights common words and up-weights distinctive terms — the core of most bag-of-words classifiers. VADER is rule-based and requires no training data (useful for social media text).
+
+---
+
+### 13. Computer Vision
+**File:** `ml_concepts/models/computer_vision.py`  
+**Dataset:** CIFAR-10 (10 classes: airplane, car, bird, cat, deer, dog, frog, horse, ship, truck)
+
+Covers the full CV pipeline from hand-crafted features to transfer learning.
+
+**Pipeline:**
+
+```
+Raw Image (32×32×3)
+  → Augmentation (flip, rotate, brightness, zoom)
+  → Feature Extraction (HOG / colour histogram)  or  CNN
+  → Classification (SVM / Custom CNN / MobileNetV2)
+```
+
+**What's explored:**
+
+| Demo | Technique | Detail |
+|------|-----------|--------|
+| Preprocessing | Channel statistics, sample grid | Mean/std per channel, RGB distribution plots |
+| Augmentation | Flip H/V, rotate, brightness, zoom | scikit-image transforms on random samples |
+| Feature Extraction | HOG + SVM / Colour Hist + SVM | HOG visualisation, Sobel edges, SVM accuracy |
+| CNN Training | Custom dual-Conv CNN + data augmentation | `RandomFlip`, `RandomRotation`, `RandomZoom`, `ReduceLROnPlateau` |
+| Transfer Learning | MobileNetV2 (ImageNet pretrained) | Linear probe SVC on frozen features; fine-tuning custom head |
+
+**CNN Architecture (CIFAR-10):**
+```
+Input(32×32×3)
+→ [Conv2D(32) → BN → Conv2D(32) → MaxPool → Dropout(0.25)]
+→ [Conv2D(64) → BN → Conv2D(64) → MaxPool → Dropout(0.25)]
+→ GlobalAveragePooling
+→ Dense(256, ReLU) → Dropout(0.5) → Dense(10, softmax)
+```
+
+**Key concept:** Hand-crafted features (HOG, colour histograms) work well for clean images but CNNs learn task-specific features automatically. Transfer learning from a pre-trained backbone typically outperforms training from scratch on small datasets.
+
+---
+
+### 14. Recommendation Systems
+**File:** `ml_concepts/models/recommendations.py`  
+**Dataset:** Synthetic 120-user × 60-item rating matrix (latent factor model, 1–5 scale, ~35% dense)
+
+Four complementary recommendation strategies with full evaluation.
+
+**Strategies:**
+
+| Method | Core Idea | Cold Start | Needs Features |
+|--------|-----------|-----------|----------------|
+| **User-Based CF** | "Users like you also liked…" | ❌ | ❌ |
+| **Item-Based CF** | "Because you liked X, try Y" | ✓ (item) | ❌ |
+| **Matrix Factorisation (SVD)** | Decompose ratings into latent factors | ❌ | ❌ |
+| **Content-Based** | Match user profile to item attributes | ✓ (user) | ✅ |
+
+**Mathematical detail:**
+
+*User-Based CF* uses mean-centred cosine similarity:
+```
+pred(u, i) = μ_u + Σ_{v∈N(u)} sim(u,v) · (r_{v,i} − μ_v) / Σ|sim(u,v)|
+```
+
+*SVD* factorises the completed rating matrix:
+```
+R ≈ U · Σ · V^T    (truncated to k components)
+```
+
+*Content-Based* builds a user genre profile:
+```
+profile(u) = mean of item feature vectors weighted by user ratings
+```
+
+**Evaluation metrics:**
+
+| Metric | Formula | What it measures |
+|--------|---------|-----------------|
+| RMSE | √(Σ(r̂ − r)² / n) | Prediction accuracy on held-out ratings |
+| Precision@K | \|relevant ∩ top-K\| / K | Proportion of recommendations that are relevant |
+| Recall@K | \|relevant ∩ top-K\| / \|relevant\| | Proportion of relevant items that are recommended |
+
+**Key concept:** No single method wins in all settings. Item-CF is more stable and less cold-start sensitive than User-CF; SVD often achieves the best RMSE; Content-Based handles new items that have no ratings history.
 
 ---
 
@@ -437,6 +593,16 @@ Cell state update: **C_t = f_t ⊙ C_{t-1} + i_t ⊙ C̃_t**
 | `rnn_prediction.png` | RNN prediction vs actual |
 | `lstm_history.png` | LSTM training loss |
 | `lstm_prediction.png` | LSTM prediction vs actual |
+| `nlp_sentiment.png` | VADER sentiment scores for sample texts |
+| `nlp_tfidf.png` | TF-IDF term importance heatmap |
+| `cv_samples.png` | CIFAR-10 sample image grid |
+| `cv_augmentation.png` | Augmented image comparison (before/after) |
+| `cv_hog.png` | HOG feature visualisation on sample images |
+| `cv_edges.png` | Sobel edge detection |
+| `cv_history.png` | CNN training curves on CIFAR-10 |
+| `cv_confusion.png` | CNN confusion matrix (10 CIFAR classes) |
+| `rec_matrix.png` | User-item rating matrix heatmap |
+| `rec_comparison.png` | RMSE / Precision@K / Recall@K comparison |
 
 ---
 
@@ -446,8 +612,11 @@ Cell state update: **C_t = f_t ⊙ C_{t-1} + i_t ⊙ C̃_t**
 numpy>=1.24.0
 pandas>=2.0.0
 scikit-learn>=1.3.0
+scikit-image>=0.21.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
+Pillow>=10.0.0
+nltk>=3.8.0
 streamlit>=1.35.0
 tensorflow-cpu>=2.15.0
 ```

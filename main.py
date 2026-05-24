@@ -37,6 +37,10 @@ TOPICS = {
     "cnn":   ("Convolutional Neural Network","ml_concepts.models.cnn"),
     "rnn":   ("Recurrent Neural Network",    "ml_concepts.models.rnn"),
     "lstm":  ("LSTM",                        "ml_concepts.models.lstm"),
+    # ── Applied AI ────────────────────────────────────────────────────────────
+    "nlp":   ("Natural Language Processing", "ml_concepts.models.nlp"),
+    "cv":    ("Computer Vision",             "ml_concepts.models.computer_vision"),
+    "rec":   ("Recommendation Systems",      "ml_concepts.models.recommendations"),
 }
 
 
