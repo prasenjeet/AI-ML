@@ -983,14 +983,40 @@ def page_ensemble():
 # NEURAL NETWORKS  (ANN · DNN · CNN · RNN · LSTM)
 # ══════════════════════════════════════════════════════════════════════════════
 import os as _os
+import subprocess as _subprocess
+import sys as _sys
+
 _os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
+def _check_tf_available() -> bool:
+    """Run TF import in a subprocess; returns False if it crashes (e.g. no AVX)."""
+    try:
+        r = _subprocess.run(
+            [_sys.executable, "-c", "import tensorflow"],
+            capture_output=True, timeout=20,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+_TF_AVAILABLE: bool = _check_tf_available()
+
 def _tf():
-    """Lazy-import TensorFlow to keep startup fast."""
+    """Lazy-import TensorFlow; returns (None,None,None,None) when unavailable."""
+    if not _TF_AVAILABLE:
+        return None, None, None, None
     import tensorflow as tf
     from tensorflow import keras
     from tensorflow.keras import layers, callbacks
     return tf, keras, layers, callbacks
+
+_TF_UNAVAILABLE_MSG = (
+    "⚠️ **TensorFlow is not available on this machine.**  \n"
+    "This CPU does not support the AVX instructions required by the installed "
+    "TensorFlow build.  \n\n"
+    "To enable neural-network sections, install a non-AVX TensorFlow build or "
+    "run the app on a machine with AVX support."
+)
 
 
 # ── Shared NN helpers ─────────────────────────────────────────────────────────
@@ -1091,6 +1117,8 @@ def _tabular(name):
 # ── Progress callback ─────────────────────────────────────────────────────────
 def _keras_progress_cb(n_epochs, bar, status):
     _, keras, _, callbacks = _tf()
+    if keras is None:
+        return None
 
     class _CB(keras.callbacks.Callback):
         def on_epoch_end(self, epoch, logs=None):
@@ -1109,6 +1137,9 @@ def _keras_progress_cb(n_epochs, bar, status):
 # ══════════════════════════════════════════════════════════════════════════════
 def _tab_ann():
     tf, keras, layers, cbs_mod = _tf()
+    if tf is None:
+        st.warning(_TF_UNAVAILABLE_MSG)
+        return
 
     st.markdown("### Artificial Neural Network — feedforward MLP for tabular data")
     st.markdown(
@@ -1219,6 +1250,9 @@ def _tab_ann():
 # ══════════════════════════════════════════════════════════════════════════════
 def _tab_dnn():
     tf, keras, layers, cbs_mod = _tf()
+    if tf is None:
+        st.warning(_TF_UNAVAILABLE_MSG)
+        return
 
     st.markdown("### Deep Neural Network — going deeper with BatchNorm & Dropout")
     st.markdown(
@@ -1341,6 +1375,9 @@ def _tab_dnn():
 # ══════════════════════════════════════════════════════════════════════════════
 def _tab_cnn():
     tf, keras, layers, _ = _tf()
+    if tf is None:
+        st.warning(_TF_UNAVAILABLE_MSG)
+        return
 
     st.markdown("### Convolutional Neural Network — image recognition on MNIST")
     st.markdown(
@@ -1470,6 +1507,9 @@ def _tab_cnn():
 # ══════════════════════════════════════════════════════════════════════════════
 def _tab_rnn():
     tf, keras, layers, _ = _tf()
+    if tf is None:
+        st.warning(_TF_UNAVAILABLE_MSG)
+        return
 
     st.markdown("### Recurrent Neural Network — time-series prediction")
     st.markdown(
@@ -1594,6 +1634,9 @@ def _tab_rnn():
 # ══════════════════════════════════════════════════════════════════════════════
 def _tab_lstm():
     tf, keras, layers, _ = _tf()
+    if tf is None:
+        st.warning(_TF_UNAVAILABLE_MSG)
+        return
 
     st.markdown("### LSTM — Long Short-Term Memory")
     st.markdown(
@@ -2098,13 +2141,13 @@ def page_computer_vision():
     from sklearn.pipeline import Pipeline
     from sklearn.metrics import accuracy_score
     from scipy.ndimage import rotate as nd_rotate
-    tf2, keras2, layers2, _ = _tf()
 
     CIFAR_NAMES = ["airplane","automobile","bird","cat","deer",
                    "dog","frog","horse","ship","truck"]
 
     @st.cache_data
     def _load_cifar(n_tr, n_te):
+        _, keras2, _, _ = _tf()
         (X_tr, y_tr),(X_te, y_te) = keras2.datasets.cifar10.load_data()
         return (X_tr[:n_tr].astype(np.float32)/255., y_tr[:n_tr].flatten(),
                 X_te[:n_te].astype(np.float32)/255., y_te[:n_te].flatten())
@@ -2223,143 +2266,151 @@ def page_computer_vision():
 
     # ── CNN Training tab ──────────────────────────────────────────────────────
     with tab_cnn:
-        st.subheader("CNN Training on CIFAR-10")
-        c1, c2, c3 = st.columns(3)
-        n_tr    = c1.select_slider("Training samples",[2000,4000,6000,8000,10000],value=6000,key="cv_ntr")
-        filters1= c2.select_slider("Conv block-1 filters",[16,32,64],value=32,key="cv_cf1")
-        filters2= c3.select_slider("Conv block-2 filters",[32,64,128],value=64,key="cv_cf2")
-        dropout = c1.slider("Dropout",0.1,0.5,0.4,0.05,key="cv_drop")
-        epochs  = c2.slider("Epochs",3,20,10,key="cv_ep")
-        aug_on  = c3.checkbox("Data augmentation",True,key="cv_aug")
-
-        if st.button("🚀 Train CNN", key="cv_cnn"):
-            with st.spinner("Loading data …"):
-                X_tr, y_tr, X_te, y_te = _load_cifar(n_tr, 2000)
-
-            keras2.backend.clear_session()
-            inp = keras2.Input(shape=(32,32,3))
-            x   = inp
-            if aug_on:
-                x = layers2.RandomFlip("horizontal")(x)
-                x = layers2.RandomRotation(0.1)(x)
-                x = layers2.RandomZoom(0.1)(x)
-            for f in (filters1, filters2):
-                x = layers2.Conv2D(f, 3, padding="same", activation="relu")(x)
-                x = layers2.BatchNormalization()(x)
-                x = layers2.Conv2D(f, 3, padding="same", activation="relu")(x)
-                x = layers2.MaxPooling2D(2)(x)
-                x = layers2.Dropout(0.25)(x)
-            x   = layers2.GlobalAveragePooling2D()(x)
-            x   = layers2.Dense(256, activation="relu")(x)
-            x   = layers2.Dropout(dropout)(x)
-            out = layers2.Dense(10, activation="softmax")(x)
-            model = keras2.Model(inp, out, name="CNN_CIFAR")
-            model.compile(optimizer=keras2.optimizers.Adam(1e-3),
-                          loss="sparse_categorical_crossentropy", metrics=["accuracy"])
-
-            st.markdown("**Architecture**"); st.markdown(_arch_md(model))
-
-            bar = st.progress(0); status = st.empty()
-            es  = keras2.callbacks.EarlyStopping(patience=5, restore_best_weights=True, verbose=0)
-            rlr = keras2.callbacks.ReduceLROnPlateau(patience=3, factor=0.5, verbose=0)
-            history = model.fit(X_tr, y_tr, epochs=epochs, batch_size=128,
-                                validation_split=0.15, verbose=0,
-                                callbacks=[_keras_progress_cb(epochs, bar, status), es, rlr])
-            bar.empty(); status.empty()
-
-            y_pred = np.argmax(model.predict(X_te, verbose=0), axis=1)
-            acc    = accuracy_score(y_te, y_pred)
-            show_metrics({"Test Accuracy": f"{acc:.4f}",
-                          "Val Accuracy":  f"{history.history['val_accuracy'][-1]:.4f}",
-                          "Params":        f"{model.count_params():,}"})
-
-            col1, col2 = st.columns(2)
-            with col1:
-                _plot_history_st(history, "CNN CIFAR-10")
-            with col2:
-                cm_v = confusion_matrix(y_te, y_pred)
-                fig, ax = plt.subplots(figsize=(6,5))
-                ConfusionMatrixDisplay(cm_v, display_labels=CIFAR_NAMES).plot(
-                    ax=ax, colorbar=False, cmap="Oranges", xticks_rotation=45)
-                fig_to_st(fig)
-
-            # Sample predictions
-            st.subheader("Sample Predictions")
-            wrong = np.where(y_te != y_pred)[0]
-            right = np.where(y_te == y_pred)[0]
-            idxs  = list(right[:6]) + list(wrong[:6])
-            fig, axes = plt.subplots(2, 6, figsize=(14, 5))
-            axes = axes.flatten()
-            for ax, idx in zip(axes, idxs):
-                ax.imshow(X_te[idx]); ax.axis("off")
-                color = "green" if y_te[idx]==y_pred[idx] else "red"
-                ax.set_title(f"T:{CIFAR_NAMES[y_te[idx]]}\nP:{CIFAR_NAMES[y_pred[idx]]}",
-                             color=color, fontsize=6)
-            plt.suptitle("Top row: Correct  |  Bottom row: Mistakes")
-            fig_to_st(fig)
-            keras2.backend.clear_session()
-
+        if not _TF_AVAILABLE:
+            st.warning(_TF_UNAVAILABLE_MSG)
         else:
-            st.info("👆 Set parameters and click **Train CNN**.")
+            tf2, keras2, layers2, _ = _tf()
+            st.subheader("CNN Training on CIFAR-10")
+            c1, c2, c3 = st.columns(3)
+            n_tr    = c1.select_slider("Training samples",[2000,4000,6000,8000,10000],value=6000,key="cv_ntr")
+            filters1= c2.select_slider("Conv block-1 filters",[16,32,64],value=32,key="cv_cf1")
+            filters2= c3.select_slider("Conv block-2 filters",[32,64,128],value=64,key="cv_cf2")
+            dropout = c1.slider("Dropout",0.1,0.5,0.4,0.05,key="cv_drop")
+            epochs  = c2.slider("Epochs",3,20,10,key="cv_ep")
+            aug_on  = c3.checkbox("Data augmentation",True,key="cv_aug")
+
+            if st.button("🚀 Train CNN", key="cv_cnn"):
+                with st.spinner("Loading data …"):
+                    X_tr, y_tr, X_te, y_te = _load_cifar(n_tr, 2000)
+
+                keras2.backend.clear_session()
+                inp = keras2.Input(shape=(32,32,3))
+                x   = inp
+                if aug_on:
+                    x = layers2.RandomFlip("horizontal")(x)
+                    x = layers2.RandomRotation(0.1)(x)
+                    x = layers2.RandomZoom(0.1)(x)
+                for f in (filters1, filters2):
+                    x = layers2.Conv2D(f, 3, padding="same", activation="relu")(x)
+                    x = layers2.BatchNormalization()(x)
+                    x = layers2.Conv2D(f, 3, padding="same", activation="relu")(x)
+                    x = layers2.MaxPooling2D(2)(x)
+                    x = layers2.Dropout(0.25)(x)
+                x   = layers2.GlobalAveragePooling2D()(x)
+                x   = layers2.Dense(256, activation="relu")(x)
+                x   = layers2.Dropout(dropout)(x)
+                out = layers2.Dense(10, activation="softmax")(x)
+                model = keras2.Model(inp, out, name="CNN_CIFAR")
+                model.compile(optimizer=keras2.optimizers.Adam(1e-3),
+                              loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+
+                st.markdown("**Architecture**"); st.markdown(_arch_md(model))
+
+                bar = st.progress(0); status = st.empty()
+                es  = keras2.callbacks.EarlyStopping(patience=5, restore_best_weights=True, verbose=0)
+                rlr = keras2.callbacks.ReduceLROnPlateau(patience=3, factor=0.5, verbose=0)
+                history = model.fit(X_tr, y_tr, epochs=epochs, batch_size=128,
+                                    validation_split=0.15, verbose=0,
+                                    callbacks=[_keras_progress_cb(epochs, bar, status), es, rlr])
+                bar.empty(); status.empty()
+
+                y_pred = np.argmax(model.predict(X_te, verbose=0), axis=1)
+                acc    = accuracy_score(y_te, y_pred)
+                show_metrics({"Test Accuracy": f"{acc:.4f}",
+                              "Val Accuracy":  f"{history.history['val_accuracy'][-1]:.4f}",
+                              "Params":        f"{model.count_params():,}"})
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    _plot_history_st(history, "CNN CIFAR-10")
+                with col2:
+                    cm_v = confusion_matrix(y_te, y_pred)
+                    fig, ax = plt.subplots(figsize=(6,5))
+                    ConfusionMatrixDisplay(cm_v, display_labels=CIFAR_NAMES).plot(
+                        ax=ax, colorbar=False, cmap="Oranges", xticks_rotation=45)
+                    fig_to_st(fig)
+
+                # Sample predictions
+                st.subheader("Sample Predictions")
+                wrong = np.where(y_te != y_pred)[0]
+                right = np.where(y_te == y_pred)[0]
+                idxs  = list(right[:6]) + list(wrong[:6])
+                fig, axes = plt.subplots(2, 6, figsize=(14, 5))
+                axes = axes.flatten()
+                for ax, idx in zip(axes, idxs):
+                    ax.imshow(X_te[idx]); ax.axis("off")
+                    color = "green" if y_te[idx]==y_pred[idx] else "red"
+                    ax.set_title(f"T:{CIFAR_NAMES[y_te[idx]]}\nP:{CIFAR_NAMES[y_pred[idx]]}",
+                                 color=color, fontsize=6)
+                plt.suptitle("Top row: Correct  |  Bottom row: Mistakes")
+                fig_to_st(fig)
+                keras2.backend.clear_session()
+
+            else:
+                st.info("👆 Set parameters and click **Train CNN**.")
 
     # ── Transfer Learning tab ─────────────────────────────────────────────────
     with tab_tl:
-        st.subheader("Transfer Learning — MobileNetV2")
-        st.markdown(
-            "Use a MobileNetV2 backbone pre-trained on ImageNet. "
-            "Freeze the backbone, add a small classification head, and train only the head."
-        )
-        c1, c2 = st.columns(2)
-        n_tl   = c1.select_slider("Samples", [1000,2000,3000,4000], value=2000, key="cv_ntl")
-        tl_ep  = c2.slider("Head epochs", 3, 15, 6, key="cv_tlep")
-        unfreeze= c1.checkbox("Unfreeze top 20 layers (fine-tune)", False, key="cv_uf")
-
-        if st.button("🚀 Run Transfer Learning", key="cv_tl"):
-            with st.spinner("Loading CIFAR-10 …"):
-                X_tr, y_tr, X_te, y_te = _load_cifar(n_tl, 1000)
-            target = (96, 96)
-            with st.spinner("Resizing images to 96×96 …"):
-                X_tr_r = np.array([sk_rz(img, target, anti_aliasing=True) for img in X_tr], dtype=np.float32)
-                X_te_r = np.array([sk_rz(img, target, anti_aliasing=True) for img in X_te], dtype=np.float32)
-
-            keras2.backend.clear_session()
-            with st.spinner("Loading MobileNetV2 (ImageNet weights) …"):
-                base = keras2.applications.MobileNetV2(
-                    input_shape=(*target,3), include_top=False, weights="imagenet", pooling="avg")
-                base.trainable = False
-                if unfreeze:
-                    for layer in base.layers[-20:]:
-                        layer.trainable = True
-
-            inp   = keras2.Input(shape=(*target,3))
-            x     = keras2.applications.mobilenet_v2.preprocess_input(inp * 255)
-            x     = base(x, training=False)
-            x     = layers2.Dense(128, activation="relu")(x)
-            x     = layers2.Dropout(0.3)(x)
-            out   = layers2.Dense(10, activation="softmax")(x)
-            model = keras2.Model(inp, out, name="TL_MobileNetV2")
-            model.compile(optimizer=keras2.optimizers.Adam(1e-3 if not unfreeze else 5e-5),
-                          loss="sparse_categorical_crossentropy", metrics=["accuracy"])
-
-            show_metrics({"Trainable params": f"{sum(np.prod(w.shape) for w in model.trainable_weights):,}",
-                          "Frozen params":    f"{sum(np.prod(w.shape) for w in model.non_trainable_weights):,}",
-                          "Fine-tune":        str(unfreeze)})
-
-            bar = st.progress(0); status = st.empty()
-            history = model.fit(X_tr_r, y_tr, epochs=tl_ep, batch_size=64,
-                                validation_split=0.15, verbose=0,
-                                callbacks=[_keras_progress_cb(tl_ep, bar, status)])
-            bar.empty(); status.empty()
-
-            y_pred = np.argmax(model.predict(X_te_r, verbose=0), axis=1)
-            acc = accuracy_score(y_te, y_pred)
-            show_metrics({"Test Accuracy":  f"{acc:.4f}",
-                          "Val Accuracy":   f"{history.history['val_accuracy'][-1]:.4f}"})
-
-            _plot_history_st(history, "Transfer Learning (MobileNetV2)")
-            keras2.backend.clear_session()
+        if not _TF_AVAILABLE:
+            st.warning(_TF_UNAVAILABLE_MSG)
         else:
-            st.info("👆 Click **Run Transfer Learning** to start.")
+            tf2, keras2, layers2, _ = _tf()
+            st.subheader("Transfer Learning — MobileNetV2")
+            st.markdown(
+                "Use a MobileNetV2 backbone pre-trained on ImageNet. "
+                "Freeze the backbone, add a small classification head, and train only the head."
+            )
+            c1, c2 = st.columns(2)
+            n_tl   = c1.select_slider("Samples", [1000,2000,3000,4000], value=2000, key="cv_ntl")
+            tl_ep  = c2.slider("Head epochs", 3, 15, 6, key="cv_tlep")
+            unfreeze= c1.checkbox("Unfreeze top 20 layers (fine-tune)", False, key="cv_uf")
+
+            if st.button("🚀 Run Transfer Learning", key="cv_tl"):
+                with st.spinner("Loading CIFAR-10 …"):
+                    X_tr, y_tr, X_te, y_te = _load_cifar(n_tl, 1000)
+                target = (96, 96)
+                with st.spinner("Resizing images to 96×96 …"):
+                    X_tr_r = np.array([sk_rz(img, target, anti_aliasing=True) for img in X_tr], dtype=np.float32)
+                    X_te_r = np.array([sk_rz(img, target, anti_aliasing=True) for img in X_te], dtype=np.float32)
+
+                keras2.backend.clear_session()
+                with st.spinner("Loading MobileNetV2 (ImageNet weights) …"):
+                    base = keras2.applications.MobileNetV2(
+                        input_shape=(*target,3), include_top=False, weights="imagenet", pooling="avg")
+                    base.trainable = False
+                    if unfreeze:
+                        for layer in base.layers[-20:]:
+                            layer.trainable = True
+
+                inp   = keras2.Input(shape=(*target,3))
+                x     = keras2.applications.mobilenet_v2.preprocess_input(inp * 255)
+                x     = base(x, training=False)
+                x     = layers2.Dense(128, activation="relu")(x)
+                x     = layers2.Dropout(0.3)(x)
+                out   = layers2.Dense(10, activation="softmax")(x)
+                model = keras2.Model(inp, out, name="TL_MobileNetV2")
+                model.compile(optimizer=keras2.optimizers.Adam(1e-3 if not unfreeze else 5e-5),
+                              loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+
+                show_metrics({"Trainable params": f"{sum(np.prod(w.shape) for w in model.trainable_weights):,}",
+                              "Frozen params":    f"{sum(np.prod(w.shape) for w in model.non_trainable_weights):,}",
+                              "Fine-tune":        str(unfreeze)})
+
+                bar = st.progress(0); status = st.empty()
+                history = model.fit(X_tr_r, y_tr, epochs=tl_ep, batch_size=64,
+                                    validation_split=0.15, verbose=0,
+                                    callbacks=[_keras_progress_cb(tl_ep, bar, status)])
+                bar.empty(); status.empty()
+
+                y_pred = np.argmax(model.predict(X_te_r, verbose=0), axis=1)
+                acc = accuracy_score(y_te, y_pred)
+                show_metrics({"Test Accuracy":  f"{acc:.4f}",
+                              "Val Accuracy":   f"{history.history['val_accuracy'][-1]:.4f}"})
+
+                _plot_history_st(history, "Transfer Learning (MobileNetV2)")
+                keras2.backend.clear_session()
+            else:
+                st.info("👆 Click **Run Transfer Learning** to start.")
 
     st.info("**Key concept:** Transfer learning adapts a model trained on millions of images "
             "to your task — even 1–2k labelled images often outperform a CNN trained from scratch.")
