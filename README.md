@@ -1,6 +1,6 @@
 # Machine Learning Concepts — Sample Project
 
-A self-contained Python project that demonstrates six fundamental machine learning techniques using **scikit-learn**. Available in two modes:
+A self-contained Python project demonstrating **eleven ML & deep learning techniques** using **scikit-learn** and **TensorFlow/Keras**. Available in two modes:
 
 - **Interactive UI** — Streamlit web app with live inputs, dynamic plots, and metric cards
 - **CLI runner** — terminal script with printed results and saved PNG charts
@@ -14,13 +14,19 @@ A self-contained Python project that demonstrates six fundamental machine learni
 - [Quick Start](#quick-start)
 - [Interactive UI](#interactive-ui-apppy)
 - [CLI Runner](#cli-runner-mainpy)
-- [Concept Details](#concept-details)
+- [Classical ML Concepts](#classical-ml-concepts)
   - [Linear Regression](#1-linear-regression)
   - [Decision Tree](#2-decision-tree)
   - [K-Means Clustering](#3-k-means-clustering)
   - [Bagging & Random Forest](#4-bagging--random-forest)
   - [Boosting](#5-boosting)
   - [Ensemble Methods](#6-ensemble-methods)
+- [Neural Network Concepts](#neural-network-concepts)
+  - [ANN – Artificial Neural Network](#7-ann--artificial-neural-network)
+  - [DNN – Deep Neural Network](#8-dnn--deep-neural-network)
+  - [CNN – Convolutional Neural Network](#9-cnn--convolutional-neural-network)
+  - [RNN – Recurrent Neural Network](#10-rnn--recurrent-neural-network)
+  - [LSTM – Long Short-Term Memory](#11-lstm--long-short-term-memory)
 - [Generated Plots](#generated-plots)
 - [Dependencies](#dependencies)
 
@@ -28,6 +34,7 @@ A self-contained Python project that demonstrates six fundamental machine learni
 
 ## Concepts Covered
 
+### Classical ML
 | # | Concept | Algorithms | Dataset |
 |---|---------|------------|---------|
 | 1 | Linear Regression | OLS, Ridge, Lasso, Polynomial | Synthetic regression |
@@ -36,6 +43,15 @@ A self-contained Python project that demonstrates six fundamental machine learni
 | 4 | Bagging & Random Forest | BaggingClassifier, RandomForest, ExtraTrees | Wine / Iris / Synthetic |
 | 5 | Boosting | AdaBoost, GradientBoosting, HistGradientBoosting | Wine / Iris / Synthetic |
 | 6 | Ensemble Methods | Hard/Soft/Weighted Voting, Stacking | Wine / Iris / Synthetic |
+
+### Neural Networks
+| # | Concept | Architecture | Dataset |
+|---|---------|-------------|---------|
+| 7  | ANN | Feedforward MLP | Wine / Iris / Synthetic (tabular) |
+| 8  | DNN | Deep MLP + BatchNorm + Dropout | Synthetic (tabular) |
+| 9  | CNN | Conv2D → MaxPool → Dense | MNIST digits |
+| 10 | RNN | SimpleRNN (stacked) | Synthetic time series |
+| 11 | LSTM | Stacked LSTM / GRU / Bidirectional | Synthetic time series |
 
 ---
 
@@ -47,18 +63,24 @@ AI-ML/
 ├── main.py                          # CLI runner
 ├── requirements.txt
 ├── .gitignore
-├── plots/                           # Generated PNG charts (21 files)
+├── plots/                           # Generated PNG charts
 └── ml_concepts/
     ├── utils/
-    │   ├── data_generator.py        # Dataset creation & splitting
-    │   └── visualizer.py           # Shared plotting functions
+    │   ├── data_generator.py        # sklearn dataset helpers
+    │   ├── visualizer.py            # Classical ML plot helpers
+    │   └── nn_utils.py              # ★ Neural Network data & plot helpers
     └── models/
         ├── linear_regression.py
         ├── decision_tree.py
         ├── kmeans_clustering.py
         ├── bagging_random_forest.py
         ├── boosting.py
-        └── ensemble.py
+        ├── ensemble.py
+        ├── ann.py                   # ★ ANN demo
+        ├── dnn.py                   # ★ DNN demo
+        ├── cnn.py                   # ★ CNN demo (MNIST)
+        ├── rnn.py                   # ★ RNN demo
+        └── lstm.py                  # ★ LSTM / GRU demo
 ```
 
 ---
@@ -80,8 +102,6 @@ python main.py --save-plots
 
 ## Interactive UI (`app.py`)
 
-The Streamlit app provides a fully interactive experience — adjust any input and results update instantly without rerunning anything manually.
-
 ```bash
 streamlit run app.py
 ```
@@ -92,216 +112,313 @@ streamlit run app.py
 ┌─────────────────────────┬─────────────────────────────────────────┐
 │  Sidebar                │  Main area                              │
 │  ───────────────        │  ─────────────────────────────          │
-│  🤖 ML Concepts         │  Metric cards (R², Accuracy, etc.)      │
+│  🤖 ML Concepts         │  Metric cards                           │
 │                         │                                         │
-│  Page navigation        │  Side-by-side interactive plots         │
-│  (7 pages)              │                                         │
+│  Page navigation        │  Interactive plots (live update)        │
+│  (8 pages)              │                                         │
 │                         │  Expandable analysis sections           │
-│  ───────────────        │                                         │
-│  Concept-specific       │  Key concept takeaway                   │
-│  sliders & dropdowns    │                                         │
+│  Concept-specific       │                                         │
+│  sliders & dropdowns    │  Key concept takeaway                   │
 └─────────────────────────┴─────────────────────────────────────────┘
 ```
 
-### Pages & Controls
+### Classical ML Pages
 
 | Page | Sidebar Inputs | Live Outputs |
 |------|----------------|--------------|
-| **🏠 Home** | — | Overview cards for all 6 concepts |
-| **📈 Linear Regression** | Variant (OLS/Ridge/Lasso/Poly), alpha, degree, samples, noise, test split | Predicted vs Actual, Residual plot, Learning curve, Coefficients table, All-variant comparison |
-| **🌳 Decision Tree** | Dataset, task (classify/regress), criterion, max_depth, min_samples_split, CCP alpha | Tree diagram, Feature importance, Confusion matrix, Depth sweep chart, CCP alpha sweep |
-| **🔵 K-Means Clustering** | Samples, true clusters, spread, k, k sweep range, init, n_init, agglomerative linkage | Elbow curve, Silhouette bar chart, Cluster scatter, Ground truth scatter, Agglomerative comparison, Sweep table |
-| **🌲 Bagging & Random Forest** | Dataset, n_estimators, max_depth, max_features, OOB toggle, comparator checkboxes (DT/Bagging/ExtraTrees) | Feature importances, Confusion matrix, Model comparison, n_estimators sweep, max_features sweep |
-| **⚡ Boosting** | Dataset, AdaBoost (n, lr, depth) and GBM (n, lr, depth, subsample) controls | Stagewise error curves (AdaBoost + GBM), Feature importances, Confusion matrix, Algorithm comparison, LR sweep |
-| **🎯 Ensemble Methods** | Dataset, per-learner checkboxes (DT/RF/GBM/KNN/NB/SVM), per-strategy checkboxes (Hard/Soft/Weighted/Stack-LR/Stack-RF) | Individual accuracy metrics, Ensemble accuracy metrics, Full comparison bar chart, Confusion matrix, Diversity heatmap, Results table |
+| **📈 Linear Regression** | Variant, alpha, degree, samples, noise, test split | Predicted vs Actual, Residuals, Learning curve, Coefficients, Comparison |
+| **🌳 Decision Tree** | Dataset, task, criterion, max_depth, CCP alpha | Tree diagram, Feature importance, Confusion matrix, Depth & CCP sweeps |
+| **🔵 K-Means** | Samples, true k, spread, k, init, n_init, linkage | Elbow, Silhouette bars, Cluster scatter, Agglomerative side-by-side |
+| **🌲 Bagging & Random Forest** | Dataset, n_estimators, max_features, OOB, comparators | Feature importance, Confusion matrix, n_estimators & max_features sweeps |
+| **⚡ Boosting** | Dataset, AdaBoost & GBM controls | Stagewise error curves, Feature importance, LR sweep |
+| **🎯 Ensemble Methods** | Per-learner & per-strategy checkboxes | Comparison bar, Confusion matrix, Diversity heatmap, Results table |
+
+### Neural Network Page (`🧠 Neural Networks`)
+
+A single page with **5 tabs** — one per architecture. Each tab has:
+- Inline controls (no sidebar) for full hyperparameter control
+- **Train Model** button — training runs with a live progress bar
+- Results appear immediately after training
+
+| Tab | Controls | Outputs |
+|-----|----------|---------|
+| **🔵 ANN** | Dataset, layers, neurons, activation, optimizer, LR, epochs, dropout | Training curves, Confusion matrix, Activation comparison expander |
+| **🟣 DNN** | Dataset, depth, width, dropout, BatchNorm, initialiser, epochs | Training curves, Confusion matrix, Depth sweep expander |
+| **🖼️ CNN** | Training size, filters (×2), kernel, dense units, dropout, epochs | Training curves, Confusion matrix, Sample predictions grid, Learned filter visualisation |
+| **🔁 RNN** | Seq length, units, layers, dropout, epochs, noise; compare LSTM/MLP | Training curves, Prediction vs Actual, Model RMSE comparison |
+| **⏳ LSTM** | Seq length, units, layers, dropout, bidir, epochs; compare RNN/GRU | Training curves, Prediction vs Actual, Overlay chart, Gate mechanism reference |
 
 ---
 
 ## CLI Runner (`main.py`)
 
-Run concepts from the terminal with printed metrics and optional PNG output.
-
 ```
 python main.py [--topic TOPIC] [--save-plots]
 
-Options:
-  --topic       Run a single concept (default: all)
-                Choices: lr | dt | km | rf | boost | ens
-  --save-plots  Save charts as PNGs to ./plots/
+Topics (classical ML):
+  lr | dt | km | rf | boost | ens
+
+Topics (neural networks):
+  ann | dnn | cnn | rnn | lstm
 ```
 
 **Examples:**
 
 ```bash
-python main.py                          # All 6 concepts
+python main.py                          # All 11 concepts
+python main.py --topic ann              # ANN only
+python main.py --topic dnn              # DNN only
+python main.py --topic cnn              # CNN (MNIST) only
+python main.py --topic rnn              # RNN only
+python main.py --topic lstm             # LSTM / GRU only
 python main.py --topic lr               # Linear Regression only
-python main.py --topic dt               # Decision Tree only
-python main.py --topic km               # K-Means Clustering only
-python main.py --topic rf               # Bagging & Random Forest only
-python main.py --topic boost            # Boosting only
-python main.py --topic ens              # Ensemble Methods only
-python main.py --save-plots             # Save all 21 charts to ./plots/
-python main.py --topic rf --save-plots  # RF only, save plots
+python main.py --save-plots             # Save all charts to ./plots/
 ```
 
 ---
 
-## Concept Details
+## Classical ML Concepts
 
 ### 1. Linear Regression
-**CLI module:** `ml_concepts/models/linear_regression.py`
-
-Explores the linear family of regression models on a synthetic dataset.
+**File:** `ml_concepts/models/linear_regression.py`
 
 | Variant | Key parameter | Purpose |
 |---------|--------------|---------|
-| OLS (Ordinary Least Squares) | — | Baseline; minimises sum of squared residuals |
-| Ridge | `alpha` (L2 penalty) | Shrinks all coefficients; handles multicollinearity |
-| Lasso | `alpha` (L1 penalty) | Zeros out weak features; built-in variable selection |
-| Polynomial (deg 2–5) | `degree` | Captures non-linear relationships via feature expansion |
+| OLS | — | Baseline; minimises squared residuals |
+| Ridge | `alpha` (L2) | Shrinks all coefficients; handles multicollinearity |
+| Lasso | `alpha` (L1) | Zeros out weak features; feature selection |
+| Polynomial (deg 2–5) | `degree` | Captures non-linear relationships |
 
-**Interactive UI inputs:** samples, features, noise, test split %, variant selector, alpha slider, polynomial degree slider
+**Output:** MSE · RMSE · MAE · R² · Predicted vs Actual · Residual plot · Learning curve
 
-**Output:** MSE · RMSE · MAE · R² · Predicted vs Actual · Residual plot · Learning curve · Coefficients table · All-variant comparison chart
-
-**Key concept:** Regularisation (Ridge/Lasso) trades a small increase in bias for a large reduction in variance, improving generalisation on unseen data.
+**Key concept:** Regularisation (Ridge/Lasso) trades a small bias increase for a large variance reduction.
 
 ---
 
 ### 2. Decision Tree
-**CLI module:** `ml_concepts/models/decision_tree.py`
+**File:** `ml_concepts/models/decision_tree.py`
 
-Demonstrates classification and regression trees with pruning strategies.
+**What's explored:** Gini vs Entropy · depth sweep (1–15) · CCP alpha pruning · regression tree
 
-**What's explored:**
-- **Criterion comparison** — Gini impurity vs Information Gain (Entropy)
-- **Depth sweep** — `max_depth` from 1–15, showing underfitting → overfitting transition
-- **Cost-complexity pruning (CCP)** — `ccp_alpha` parameter to post-prune the tree
-- **Regression tree** — predicts continuous values on a synthetic dataset
+**Output:** Tree visualisation · Feature importance · Confusion matrix · Depth & CCP sweeps
 
-**Interactive UI inputs:** dataset (Iris/Wine/Synthetic), task (classify/regress), criterion, max_depth, min_samples_split, CCP alpha
-
-**Output:** Tree visualisation · Feature importance · Confusion matrix · Depth sweep chart · CCP alpha sweep chart
-
-**Key concept:** A single unpruned tree memorises training data. Controlling `max_depth` or `ccp_alpha` is essential to generalise beyond the training set.
+**Key concept:** Unpruned trees memorise training data; pruning (max_depth / ccp_alpha) is essential to generalise.
 
 ---
 
 ### 3. K-Means Clustering
-**CLI module:** `ml_concepts/models/kmeans_clustering.py`
+**File:** `ml_concepts/models/kmeans_clustering.py`
 
-Unsupervised clustering on synthetic 2D blob data.
+**What's explored:** Elbow method · silhouette analysis · k-means++ vs random init · agglomerative linkages
 
-**What's explored:**
-- **Elbow method** — inertia (within-cluster SSE) vs k
-- **Silhouette analysis** — finds optimal k by maximising average silhouette score
-- **Initialisation strategies** — `k-means++` vs `random` (convergence quality)
-- **Agglomerative hierarchical clustering** — ward, complete, average, single linkage
+**Metrics:** Inertia · Silhouette Score · Davies-Bouldin Index
 
-**Metrics reported:** Inertia · Silhouette Score · Davies-Bouldin Index
-
-**Interactive UI inputs:** samples, true clusters, cluster spread, k, sweep range, init strategy, n_init, agglomerative linkage
-
-**Output:** Elbow curve · Silhouette bar chart · Cluster scatter with centroids · Ground truth comparison · Agglomerative side-by-side · Sweep results table
-
-**Key concept:** K-Means is sensitive to scale and initialisation. Always standardise features and prefer `k-means++` init. Use silhouette score alongside the elbow to confirm k.
+**Key concept:** Always standardise before clustering; use Elbow + Silhouette together to pick k.
 
 ---
 
 ### 4. Bagging & Random Forest
-**CLI module:** `ml_concepts/models/bagging_random_forest.py`
-
-Demonstrates how bagging reduces variance by aggregating many decorrelated trees.
+**File:** `ml_concepts/models/bagging_random_forest.py`
 
 | Model | Core idea |
 |-------|-----------|
 | Single Decision Tree | High-variance baseline |
-| BaggingClassifier | Bootstrap samples + aggregate predictions |
-| RandomForestClassifier | Bagging + random feature subset at each split |
-| ExtraTreesClassifier | RF + randomised split thresholds |
+| BaggingClassifier | Bootstrap + aggregate |
+| RandomForestClassifier | Bagging + random feature subset |
+| ExtraTreesClassifier | RF + randomised thresholds |
 
-**What's explored:**
-- **OOB (Out-of-Bag) score** — free cross-validation estimate without a held-out set
-- **n_estimators sweep** — 1 to 500 trees, showing diminishing returns
-- **max_features sweep** — `sqrt`, `log2`, `None`, `0.3`, `0.6`
+**What's explored:** OOB score · n_estimators sweep · max_features sweep
 
-**Interactive UI inputs:** dataset, n_estimators, max_depth, max_features, OOB toggle, comparator checkboxes
-
-**Output:** Feature importance chart · Confusion matrix · Model comparison bar chart · n_estimators sweep · max_features sweep
-
-**Key concept:** Bagging reduces variance by averaging independent high-variance models. Random Forest decorrelates those models further by limiting which features each tree can consider.
+**Key concept:** Random Forest decorrelates trees via feature randomness → lower variance than plain bagging.
 
 ---
 
 ### 5. Boosting
-**CLI module:** `ml_concepts/models/boosting.py`
-
-Sequential ensemble learning — each new model corrects the errors of the previous ones.
+**File:** `ml_concepts/models/boosting.py`
 
 | Algorithm | Mechanism |
 |-----------|-----------|
-| **AdaBoost** | Re-weights misclassified samples; uses decision stumps |
-| **GradientBoosting** | Fits residuals (negative gradient) at each stage |
-| **HistGradientBoosting** | Bins continuous features → 10–100× faster for large data |
+| AdaBoost | Re-weights misclassified samples |
+| GradientBoosting | Fits negative gradient (residuals) sequentially |
+| HistGradientBoosting | Histogrammed features → 10–100× faster |
 
-**What's explored:**
-- **Stagewise error curves** — train vs test error at every boosting round
-- **Learning-rate sweep** — `lr` from 0.001 to 1.0 (shrinkage vs speed trade-off)
-- **Feature importance** from the GBM model
+**What's explored:** Stagewise error curves · learning-rate sweep · feature importance
 
-**Interactive UI inputs:** dataset, AdaBoost controls (n, lr, depth), GBM controls (n, lr, depth, subsample)
-
-**Output:** AdaBoost stagewise error · GBM stagewise error · Feature importances · Best-model confusion matrix · Algorithm comparison · Learning rate sweep table
-
-**Key concept:** Boosting reduces bias by sequentially fitting weak learners to the errors. A lower learning rate with more estimators consistently generalises better but requires more computation.
+**Key concept:** Lower learning rate + more estimators generalises better but costs more compute.
 
 ---
 
 ### 6. Ensemble Methods
-**CLI module:** `ml_concepts/models/ensemble.py`
+**File:** `ml_concepts/models/ensemble.py`
 
-Combines six diverse base learners into higher-level ensembles.
+| Strategy | Combination method |
+|----------|--------------------|
+| Hard Voting | Majority class vote |
+| Soft Voting | Average predicted probabilities |
+| Weighted Soft Voting | Weighted average (weights ∝ accuracy) |
+| Stacking (LR) | Logistic Regression meta-learner |
+| Stacking (RF) | Random Forest meta-learner |
 
-| Strategy | How it combines predictions |
-|----------|-----------------------------|
-| **Hard Voting** | Majority class vote |
-| **Soft Voting** | Average predicted probabilities |
-| **Weighted Soft Voting** | Weighted average (weights ∝ individual accuracy) |
-| **Stacking (LR meta)** | Logistic Regression learns from base predictions |
-| **Stacking (RF meta)** | Random Forest learns from base predictions |
+**Key concept:** Ensemble power comes from **diversity** — low pairwise agreement between base models.
+
+---
+
+## Neural Network Concepts
+
+### 7. ANN – Artificial Neural Network
+**File:** `ml_concepts/models/ann.py`  
+**Dataset:** Tabular classification (Wine / Iris / Synthetic)
+
+A fully-connected feedforward network — the foundational deep learning architecture.
+
+**Architecture:**
+```
+Input(n_features) → Dense(n, activation) × n_layers → Dropout → Dense(n_classes, softmax)
+```
 
 **What's explored:**
-- **Diversity analysis** — pairwise prediction agreement heatmap between all base learners
-- **CV evaluation** of stacking configurations
+- Activation functions: ReLU · tanh · sigmoid · ELU
+- Optimizers: Adam · SGD · RMSprop
+- Hidden layer width sweep (16 → 256)
+- Dropout regularisation
 
-**Interactive UI inputs:** dataset, per-learner checkboxes (DT/RF/GBM/KNN/NB/SVM), per-strategy checkboxes
+**Interactive UI inputs:** dataset, layers, neurons/layer, activation, optimizer, learning rate, epochs, dropout
 
-**Output:** Individual accuracy metrics · Ensemble accuracy metrics · Full comparison bar chart · Best-ensemble confusion matrix · Diversity heatmap · Ranked results table
+**Key concept:** ANN is a universal function approximator. ReLU avoids vanishing gradients; Adam converges faster than SGD on most problems.
 
-**Key concept:** Ensemble power comes from **diversity**, not just individual accuracy. Low pairwise agreement means errors don't overlap — ideal for combining.
+---
+
+### 8. DNN – Deep Neural Network
+**File:** `ml_concepts/models/dnn.py`  
+**Dataset:** Synthetic tabular classification
+
+Extends ANN to many hidden layers with training stabilisers.
+
+**Architecture:**
+```
+Input → [Dense → BatchNorm → ReLU → Dropout] × n_layers → Dense(n_classes, softmax)
+```
+
+**What's explored:**
+- Depth sweep: 1 → 10 layers
+- Batch Normalisation ablation
+- Dropout rate sweep (0 → 0.5)
+- Weight initialisers: He Normal · Glorot Uniform · LeCun Normal
+- Learning rate schedulers: ReduceLROnPlateau · EarlyStopping
+
+**Interactive UI inputs:** dataset, depth, width, dropout, BatchNorm toggle, initialiser, epochs
+
+**Key concept:** BatchNorm normalises layer inputs at each mini-batch — essential for training networks deeper than ~5 layers. He initialisation is preferred for ReLU activations.
+
+---
+
+### 9. CNN – Convolutional Neural Network
+**File:** `ml_concepts/models/cnn.py`  
+**Dataset:** MNIST handwritten digits (subset)
+
+Convolutions detect spatial patterns with shared weights — far more efficient than Dense layers for images.
+
+**Architecture:**
+```
+Input(28×28×1)
+→ [Conv2D(f1) → BN → Conv2D(f1) → MaxPool → Dropout] ×1
+→ [Conv2D(f2) → BN → Conv2D(f2) → MaxPool → Dropout] ×1
+→ Flatten / GlobalAvgPool → Dense(units) → Dropout → Dense(10, softmax)
+```
+
+**What's explored:**
+- Filter count sweep: (8,16) → (64,128)
+- Kernel size comparison: 3×3 vs 5×5
+- GlobalAveragePooling vs Flatten
+- Learned filter visualisation (Conv1 weights)
+- Sample prediction grid (correct in green, wrong in red)
+
+**Interactive UI inputs:** training size, conv filters ×2, kernel size, dense units, dropout, epochs, GAP toggle
+
+**Key concept:** Conv layers slide filters over the image, sharing weights spatially — edge/curve detectors emerge automatically from training. MaxPooling adds translation invariance.
+
+---
+
+### 10. RNN – Recurrent Neural Network
+**File:** `ml_concepts/models/rnn.py`  
+**Dataset:** Synthetic multi-frequency sine wave (time series)
+
+RNNs maintain a hidden state across time steps — suitable for sequential data.
+
+**Architecture:**
+```
+Input(seq_len, 1) → SimpleRNN(units) [× n_layers] → Dense(1)
+```
+
+**What's explored:**
+- Sequence length sweep (10 → 120)
+- Layer depth sweep (1 → 3)
+- Comparison with MLP baseline (no recurrence)
+- Vanishing gradient discussion
+
+**Interactive UI inputs:** seq length, units, layers, dropout, epochs, noise; optional LSTM/MLP comparison
+
+**Key concept:** The hidden state *h_t = f(W·x_t + U·h_{t-1})* carries information forward in time. Vanilla RNNs forget events more than ~20 steps back — the motivation for LSTM.
+
+---
+
+### 11. LSTM – Long Short-Term Memory
+**File:** `ml_concepts/models/lstm.py`  
+**Dataset:** Synthetic multi-frequency sine wave (time series)
+
+LSTMs add forget / input / output gates and a separate cell state to solve vanishing gradients.
+
+**Architecture:**
+```
+Input(seq_len, 1) → LSTM(units) [× n_layers] → Dense(1)
+Optional: Bidirectional wrapper
+```
+
+**What's explored:**
+- LSTM vs SimpleRNN vs GRU head-to-head (RMSE comparison)
+- Bidirectional LSTM (reads sequence forward + backward)
+- Dropout & recurrent_dropout sweeps
+- Sequence length sweep
+- Prediction overlay chart
+- Gate mechanism reference table
+
+**Interactive UI inputs:** seq length, units, layers, dropout, bidirectional toggle, epochs, noise; optional RNN/GRU comparison
+
+**LSTM Gate Mechanism:**
+
+| Gate | Purpose |
+|------|---------|
+| **Forget** *f_t* | Decides what to discard from cell state |
+| **Input** *i_t* | Decides what new information to store |
+| **Update** *C̃_t* | New candidate values for cell state |
+| **Output** *o_t* | Decides what to expose as hidden state |
+
+Cell state update: **C_t = f_t ⊙ C_{t-1} + i_t ⊙ C̃_t**
+
+**Key concept:** The cell state *C_t* is a 'conveyor belt' that can carry gradients across hundreds of steps. GRU achieves similar results with fewer parameters (2 gates instead of 3).
 
 ---
 
 ## Generated Plots
 
-Running `python main.py --save-plots` produces 21 charts in `./plots/`:
+`python main.py --save-plots` saves charts to `./plots/`:
 
-| Filename | Description |
-|----------|-------------|
-| `lr_fit.png` | OLS predicted vs actual + residual plot |
-| `lr_learning_curve.png` | Training size vs R² score |
-| `lr_comparison.png` | R² comparison across regression variants |
-| `dt_tree.png` | Full decision tree visualisation |
+| File | Description |
+|------|-------------|
+| `lr_fit.png` | OLS predicted vs actual + residuals |
+| `lr_learning_curve.png` | Training size vs R² |
+| `lr_comparison.png` | R² across all regression variants |
+| `dt_tree.png` | Full tree visualisation |
 | `dt_feature_importance.png` | Feature importance bar chart |
 | `dt_confusion.png` | Decision tree confusion matrix |
 | `dt_depth_comparison.png` | Test accuracy vs max_depth |
 | `km_elbow.png` | Elbow curve (inertia vs k) |
-| `km_clusters.png` | Final K-Means cluster scatter with centroids |
+| `km_clusters.png` | K-Means cluster scatter + centroids |
 | `km_agglomerative.png` | Agglomerative clustering scatter |
-| `km_true_labels.png` | Ground truth labels scatter |
+| `km_true_labels.png` | Ground truth labels |
 | `rf_feature_importance.png` | Random Forest feature importances |
 | `rf_confusion.png` | Random Forest confusion matrix |
-| `rf_comparison.png` | Single DT vs Bagging vs RF vs ExtraTrees |
+| `rf_comparison.png` | DT vs Bagging vs RF vs ExtraTrees |
 | `boost_ada_stages.png` | AdaBoost stagewise train/test error |
 | `boost_gbm_stages.png` | GBM stagewise train/test error |
 | `boost_feature_importance.png` | GBM feature importances |
@@ -309,6 +426,17 @@ Running `python main.py --save-plots` produces 21 charts in `./plots/`:
 | `boost_comparison.png` | AdaBoost vs GBM vs HistGBM |
 | `ens_confusion.png` | Best ensemble confusion matrix |
 | `ens_comparison.png` | All base models + all ensembles |
+| `ann_history.png` | ANN loss & accuracy curves |
+| `ann_confusion.png` | ANN confusion matrix |
+| `dnn_history.png` | DNN loss & accuracy curves |
+| `dnn_confusion.png` | DNN confusion matrix |
+| `cnn_history.png` | CNN loss & accuracy curves |
+| `cnn_confusion.png` | CNN confusion matrix (10 digits) |
+| `cnn_samples.png` | CNN prediction samples grid |
+| `rnn_history.png` | RNN training loss |
+| `rnn_prediction.png` | RNN prediction vs actual |
+| `lstm_history.png` | LSTM training loss |
+| `lstm_prediction.png` | LSTM prediction vs actual |
 
 ---
 
@@ -321,6 +449,7 @@ scikit-learn>=1.3.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 streamlit>=1.35.0
+tensorflow-cpu>=2.15.0
 ```
 
 Install with:
