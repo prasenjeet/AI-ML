@@ -94,11 +94,12 @@ with st.sidebar:
             "🌲  Bagging & Random Forest",
             "⚡  Boosting",
             "🎯  Ensemble Methods",
+            "🧠  Neural Networks",
         ],
         label_visibility="collapsed",
     )
     st.divider()
-    st.caption("scikit-learn · Streamlit · matplotlib")
+    st.caption("scikit-learn · TensorFlow · Streamlit")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -119,6 +120,11 @@ def page_home():
         ("🌲", "Bagging & Random Forest",  "Bootstrap · OOB · ExtraTrees · n_estimators sweep"),
         ("⚡", "Boosting",                 "AdaBoost · GBM · HistGBM · stagewise curves"),
         ("🎯", "Ensemble Methods",         "Hard/Soft voting · Weighted · Stacking · Diversity"),
+        ("🔵", "ANN",                      "Feedforward MLP · activations · optimizers"),
+        ("🟣", "DNN",                      "Deep layers · BatchNorm · Dropout · depth sweep"),
+        ("🖼️", "CNN",                      "Conv2D · Pooling · MNIST · filter sweep"),
+        ("🔁", "RNN",                      "SimpleRNN · seq length · stacked layers"),
+        ("⏳", "LSTM",                     "Gates · GRU · Bidirectional · long-range memory"),
     ]
     cols = st.columns(3)
     for i, (icon, name, desc) in enumerate(cards):
@@ -964,6 +970,780 @@ def page_ensemble():
 # ══════════════════════════════════════════════════════════════════════════════
 # ROUTER
 # ══════════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
+# NEURAL NETWORKS  (ANN · DNN · CNN · RNN · LSTM)
+# ══════════════════════════════════════════════════════════════════════════════
+import os as _os
+_os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+def _tf():
+    """Lazy-import TensorFlow to keep startup fast."""
+    import tensorflow as tf
+    from tensorflow import keras
+    from tensorflow.keras import layers, callbacks
+    return tf, keras, layers, callbacks
+
+
+# ── Shared NN helpers ─────────────────────────────────────────────────────────
+def _plot_history_st(history, title="Training History"):
+    """Render loss + accuracy curves inside Streamlit."""
+    keys = list(history.history.keys())
+    has_acc = any("acc" in k for k in keys)
+    n = 2 if has_acc else 1
+    fig, axes = plt.subplots(1, n, figsize=(6 * n, 4))
+    if n == 1:
+        axes = [axes]
+
+    axes[0].plot(history.history["loss"],     label="Train",      color=PALETTE[0])
+    if "val_loss" in history.history:
+        axes[0].plot(history.history["val_loss"], label="Validation", color=PALETTE[1])
+    axes[0].set_xlabel("Epoch"); axes[0].set_ylabel("Loss")
+    axes[0].set_title(f"{title} – Loss"); axes[0].legend()
+
+    if has_acc:
+        ak  = "accuracy"     if "accuracy"     in keys else "acc"
+        vak = "val_accuracy" if "val_accuracy" in keys else "val_acc"
+        axes[1].plot(history.history[ak],  label="Train",      color=PALETTE[2])
+        if vak in history.history:
+            axes[1].plot(history.history[vak], label="Validation", color=PALETTE[3])
+        axes[1].set_xlabel("Epoch"); axes[1].set_ylabel("Accuracy")
+        axes[1].set_title(f"{title} – Accuracy"); axes[1].legend()
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+
+
+def _plot_ts_st(y_true, y_pred, title="Prediction vs Actual"):
+    n_show = min(300, len(y_true))
+    fig, axes = plt.subplots(2, 1, figsize=(11, 5))
+    axes[0].plot(y_true[:n_show], label="Actual",    color=PALETTE[0], lw=1.2)
+    axes[0].plot(y_pred[:n_show], label="Predicted", color=PALETTE[1], lw=1.2, alpha=0.85)
+    axes[0].set_title(title); axes[0].legend()
+    err = np.abs(y_true[:n_show] - y_pred[:n_show])
+    axes[1].fill_between(range(n_show), err, alpha=0.5, color=PALETTE[2])
+    axes[1].set_title("Absolute Error"); axes[1].set_xlabel("Time step")
+    plt.tight_layout(); st.pyplot(fig); plt.close(fig)
+
+
+def _arch_md(model) -> str:
+    lines = ["```", f"{'Layer':<24} {'Output shape':<22} {'Params':>10}",
+             "-" * 58]
+    total = 0
+    for layer in model.layers:
+        name = layer.__class__.__name__
+        try:
+            shape = str(layer.output.shape)
+        except Exception:
+            shape = "?"
+        p = layer.count_params()
+        total += p
+        lines.append(f"{name:<24} {shape:<22} {p:>10,}")
+    lines += ["-" * 58, f"{'Total params':<46} {total:>10,}", "```"]
+    return "\n".join(lines)
+
+
+def _make_time_series():
+    rng = np.random.default_rng(42)
+    t = np.linspace(0, 6 * np.pi * 10, 3000)
+    return (np.sin(0.3 * t) + 0.5 * np.sin(0.7 * t)
+            + 0.3 * np.sin(1.3 * t)
+            + 0.08 * rng.standard_normal(3000)).astype(np.float32)
+
+
+def _make_sequences(signal, seq_len):
+    X, y = [], []
+    for i in range(seq_len, len(signal)):
+        X.append(signal[i - seq_len: i])
+        y.append(signal[i])
+    return np.array(X, dtype=np.float32)[..., np.newaxis], np.array(y, dtype=np.float32)
+
+
+def _tabular(name):
+    from sklearn.model_selection import train_test_split
+    if name == "Iris":
+        from sklearn.datasets import load_iris
+        d = load_iris(); X, y = d.data, d.target
+        cnames = list(d.target_names)
+    elif name == "Wine":
+        from sklearn.datasets import load_wine
+        d = load_wine(); X, y = d.data, d.target
+        cnames = list(d.target_names)
+    else:
+        from sklearn.datasets import make_classification
+        X, y = make_classification(600, n_features=15, n_informative=8,
+                                   n_classes=3, n_clusters_per_class=1, random_state=42)
+        cnames = ["Class 0", "Class 1", "Class 2"]
+    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42)
+    sc = StandardScaler()
+    return sc.fit_transform(Xtr).astype(np.float32), sc.transform(Xte).astype(np.float32), ytr, yte, cnames
+
+
+# ── Progress callback ─────────────────────────────────────────────────────────
+def _keras_progress_cb(n_epochs, bar, status):
+    _, keras, _, callbacks = _tf()
+
+    class _CB(keras.callbacks.Callback):
+        def on_epoch_end(self, epoch, logs=None):
+            logs = logs or {}
+            bar.progress((epoch + 1) / n_epochs)
+            parts = [f"epoch {epoch+1}/{n_epochs}"]
+            for k, v in logs.items():
+                parts.append(f"{k}={v:.4f}")
+            status.text("  ".join(parts))
+
+    return _CB()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB: ANN
+# ══════════════════════════════════════════════════════════════════════════════
+def _tab_ann():
+    tf, keras, layers, cbs_mod = _tf()
+
+    st.markdown("### Artificial Neural Network — feedforward MLP for tabular data")
+    st.markdown(
+        "A fully-connected network where every neuron in one layer connects to every neuron "
+        "in the next. The simplest neural architecture — great for structured / tabular data."
+    )
+
+    # ── Controls ──────────────────────────────────────────────────────────────
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        dataset   = st.selectbox("Dataset",    ["Wine", "Iris", "Synthetic"], key="ann_ds")
+        n_layers  = st.slider("Hidden layers",  1, 6, 2, key="ann_nl")
+        n_neurons = st.slider("Neurons / layer", 8, 256, 64, 8, key="ann_nn")
+    with c2:
+        activation = st.selectbox("Activation", ["relu", "tanh", "sigmoid", "elu"], key="ann_act")
+        optimizer  = st.selectbox("Optimizer",  ["adam", "rmsprop", "sgd"], key="ann_opt")
+        lr         = st.select_slider("Learning rate", [1e-4, 5e-4, 1e-3, 5e-3, 1e-2],
+                                      value=1e-3, key="ann_lr")
+    with c3:
+        epochs   = st.slider("Epochs",          10, 200, 80, 10, key="ann_ep")
+        batch_sz = st.select_slider("Batch size", [8, 16, 32, 64, 128], value=32, key="ann_bs")
+        dropout  = st.slider("Dropout",         0.0, 0.5, 0.0, 0.05, key="ann_dr")
+
+    if st.button("🚀 Train ANN", key="ann_train"):
+        X_train, X_test, y_train, y_test, cls_names = _tabular(dataset)
+        n_feat, n_cls = X_train.shape[1], len(cls_names)
+
+        keras.backend.clear_session()
+        inp = keras.Input(shape=(n_feat,))
+        x   = inp
+        for _ in range(n_layers):
+            x = layers.Dense(n_neurons, activation=activation)(x)
+            if dropout > 0:
+                x = layers.Dropout(dropout)(x)
+        out = layers.Dense(n_cls, activation="softmax")(x)
+        model = keras.Model(inp, out, name="ANN")
+
+        opt_obj = {"adam": keras.optimizers.Adam(lr),
+                   "rmsprop": keras.optimizers.RMSprop(lr),
+                   "sgd": keras.optimizers.SGD(lr)}[optimizer]
+        model.compile(optimizer=opt_obj, loss="sparse_categorical_crossentropy",
+                      metrics=["accuracy"])
+
+        # Architecture display
+        st.markdown("**Architecture**")
+        st.markdown(_arch_md(model))
+
+        bar    = st.progress(0)
+        status = st.empty()
+        history = model.fit(
+            X_train, y_train, epochs=epochs, batch_size=batch_sz,
+            validation_split=0.2, verbose=0,
+            callbacks=[_keras_progress_cb(epochs, bar, status)],
+        )
+        bar.empty(); status.empty()
+
+        y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
+        acc = accuracy_score(y_test, y_pred)
+
+        show_metrics({"Test Accuracy": f"{acc:.4f}",
+                      "Val Accuracy":  f"{history.history['val_accuracy'][-1]:.4f}",
+                      "Final Loss":    f"{history.history['loss'][-1]:.4f}",
+                      "Total Params":  f"{model.count_params():,}"})
+
+        col1, col2 = st.columns(2)
+        with col1:
+            _plot_history_st(history, "ANN")
+        with col2:
+            cm = confusion_matrix(y_test, y_pred)
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ConfusionMatrixDisplay(cm, display_labels=cls_names).plot(ax=ax, colorbar=False, cmap="Blues")
+            ax.set_title("Confusion Matrix")
+            fig_to_st(fig)
+
+        # Activation comparison
+        with st.expander("Compare All Activations"):
+            act_names, act_accs = [], []
+            prog = st.progress(0)
+            for i, act in enumerate(["relu", "tanh", "sigmoid", "elu", "selu"]):
+                keras.backend.clear_session()
+                m_inp = keras.Input(shape=(n_feat,))
+                mx = m_inp
+                for _ in range(n_layers):
+                    mx = layers.Dense(n_neurons, activation=act)(mx)
+                m_out = layers.Dense(n_cls, activation="softmax")(mx)
+                m = keras.Model(m_inp, m_out)
+                m.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+                m.fit(X_train, y_train, epochs=50, batch_size=batch_sz,
+                      validation_split=0.2, verbose=0)
+                yp = np.argmax(m.predict(X_test, verbose=0), axis=1)
+                act_names.append(act); act_accs.append(accuracy_score(y_test, yp))
+                prog.progress((i + 1) / 5)
+            prog.empty()
+            fig, ax = plt.subplots(figsize=(8, 3))
+            bars = ax.bar(act_names, act_accs, color=[PALETTE[i % 10] for i in range(5)])
+            ax.bar_label(bars, fmt="%.4f"); ax.set_ylim(0, 1.1)
+            ax.set_title("Activation Function Comparison"); fig_to_st(fig)
+
+    else:
+        st.info("👆 Set parameters above and click **Train ANN** to start.")
+
+    st.info("**Key concept:** ANN = universal function approximator. Deeper/wider networks "
+            "can model more complex patterns, but need regularisation (Dropout) to generalise.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB: DNN
+# ══════════════════════════════════════════════════════════════════════════════
+def _tab_dnn():
+    tf, keras, layers, cbs_mod = _tf()
+
+    st.markdown("### Deep Neural Network — going deeper with BatchNorm & Dropout")
+    st.markdown(
+        "A DNN extends the ANN with many more hidden layers. Batch Normalisation and "
+        "Dropout are essential to train deep networks stably and without overfitting."
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        dataset  = st.selectbox("Dataset",     ["Synthetic", "Wine", "Iris"], key="dnn_ds")
+        n_layers = st.slider("Hidden layers",   2, 10, 5, key="dnn_nl")
+        width    = st.slider("Layer width",     16, 256, 128, 16, key="dnn_w")
+    with c2:
+        dropout   = st.slider("Dropout",        0.0, 0.5, 0.3, 0.05, key="dnn_dr")
+        batch_norm= st.checkbox("Batch Normalisation", True, key="dnn_bn")
+        initializer = st.selectbox("Initialiser",
+                                   ["he_normal", "glorot_uniform", "he_uniform", "lecun_normal"],
+                                   key="dnn_init")
+    with c3:
+        epochs   = st.slider("Epochs", 20, 200, 100, 10, key="dnn_ep")
+        batch_sz = st.select_slider("Batch size", [16, 32, 64, 128], value=32, key="dnn_bs")
+        lr       = st.select_slider("Learning rate", [1e-4, 5e-4, 1e-3, 5e-3, 1e-2],
+                                    value=1e-3, key="dnn_lr")
+
+    if st.button("🚀 Train DNN", key="dnn_train"):
+        X_train, X_test, y_train, y_test, cls_names = _tabular(dataset)
+        n_feat, n_cls = X_train.shape[1], len(cls_names)
+
+        keras.backend.clear_session()
+        inp = keras.Input(shape=(n_feat,))
+        x   = inp
+        for i in range(n_layers):
+            units = max(width // (2 ** (i // 3)), 16)
+            x = layers.Dense(units, activation=None, kernel_initializer=initializer)(x)
+            if batch_norm:
+                x = layers.BatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+            if dropout > 0 and i < n_layers - 1:
+                x = layers.Dropout(dropout)(x)
+        out = layers.Dense(n_cls, activation="softmax")(x)
+        model = keras.Model(inp, out, name="DNN")
+        model.compile(
+            optimizer=keras.optimizers.Adam(lr),
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+
+        st.markdown("**Architecture**")
+        st.markdown(_arch_md(model))
+
+        bar = st.progress(0); status = st.empty()
+        es  = keras.callbacks.EarlyStopping(patience=15, restore_best_weights=True, verbose=0)
+        rlr = keras.callbacks.ReduceLROnPlateau(patience=8, factor=0.5, verbose=0)
+        history = model.fit(
+            X_train, y_train, epochs=epochs, batch_size=batch_sz,
+            validation_split=0.2, verbose=0,
+            callbacks=[_keras_progress_cb(epochs, bar, status), es, rlr],
+        )
+        bar.empty(); status.empty()
+
+        y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
+        acc = accuracy_score(y_test, y_pred)
+        actual_epochs = len(history.history["loss"])
+
+        show_metrics({"Test Accuracy": f"{acc:.4f}",
+                      "Val Accuracy":  f"{history.history['val_accuracy'][-1]:.4f}",
+                      "Epochs run":    str(actual_epochs),
+                      "Total Params":  f"{model.count_params():,}"})
+
+        col1, col2 = st.columns(2)
+        with col1:
+            _plot_history_st(history, "DNN")
+        with col2:
+            cm = confusion_matrix(y_test, y_pred)
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ConfusionMatrixDisplay(cm, display_labels=cls_names).plot(ax=ax, colorbar=False, cmap="Purples")
+            ax.set_title("Confusion Matrix"); fig_to_st(fig)
+
+        # Depth sweep
+        with st.expander("Depth Sweep (layers 1 → 10)"):
+            depths, d_accs = list(range(1, 11)), []
+            prog = st.progress(0)
+            for i, d in enumerate(depths):
+                keras.backend.clear_session()
+                m_inp = keras.Input(shape=(n_feat,))
+                mx = m_inp
+                for _ in range(d):
+                    mx = layers.Dense(width, activation=None, kernel_initializer=initializer)(mx)
+                    if batch_norm:
+                        mx = layers.BatchNormalization()(mx)
+                    mx = layers.Activation("relu")(mx)
+                    if dropout > 0:
+                        mx = layers.Dropout(dropout)(mx)
+                m_out = layers.Dense(n_cls, activation="softmax")(mx)
+                m = keras.Model(m_inp, m_out)
+                m.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+                m.fit(X_train, y_train, epochs=60, batch_size=batch_sz,
+                      validation_split=0.2, verbose=0,
+                      callbacks=[keras.callbacks.EarlyStopping(patience=10, restore_best_weights=True)])
+                yp = np.argmax(m.predict(X_test, verbose=0), axis=1)
+                d_accs.append(accuracy_score(y_test, yp))
+                prog.progress((i + 1) / len(depths))
+            prog.empty()
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(depths, d_accs, "o-", color=PALETTE[0])
+            ax.axvline(n_layers, color="red", ls="--", label=f"Selected={n_layers}")
+            ax.set_xlabel("Number of layers"); ax.set_ylabel("Test Accuracy")
+            ax.set_title("DNN – Depth vs Accuracy"); ax.legend(); fig_to_st(fig)
+
+    else:
+        st.info("👆 Configure the DNN above and click **Train DNN**.")
+
+    st.info("**Key concept:** BatchNorm normalises layer inputs at each mini-batch, "
+            "accelerating training and allowing higher learning rates. Dropout randomly "
+            "deactivates neurons during training, acting as an ensemble of thinner networks.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB: CNN
+# ══════════════════════════════════════════════════════════════════════════════
+def _tab_cnn():
+    tf, keras, layers, _ = _tf()
+
+    st.markdown("### Convolutional Neural Network — image recognition on MNIST")
+    st.markdown(
+        "Conv layers slide small filters over the input, detecting local patterns "
+        "(edges, curves …) while sharing weights — massively more efficient than dense "
+        "layers for image data."
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        n_train   = st.select_slider("Training samples", [2000, 4000, 6000, 8000, 10000], value=6000, key="cnn_ntr")
+        filters1  = st.select_slider("Conv block-1 filters", [8, 16, 32, 64], value=32, key="cnn_f1")
+        filters2  = st.select_slider("Conv block-2 filters", [16, 32, 64, 128], value=64, key="cnn_f2")
+    with c2:
+        kernel_sz = st.selectbox("Kernel size", [3, 5], key="cnn_ks")
+        dense_u   = st.select_slider("Dense units", [32, 64, 128, 256], value=128, key="cnn_du")
+        dropout   = st.slider("Dropout (dense head)", 0.0, 0.5, 0.3, 0.05, key="cnn_dr")
+    with c3:
+        epochs    = st.slider("Epochs", 3, 20, 8, key="cnn_ep")
+        batch_sz  = st.select_slider("Batch size", [32, 64, 128, 256], value=128, key="cnn_bs")
+        use_gap   = st.checkbox("GlobalAvgPool instead of Flatten", False, key="cnn_gap")
+
+    if st.button("🚀 Train CNN", key="cnn_train"):
+        with st.spinner("Loading MNIST …"):
+            (X_tr_all, y_tr_all), (X_te, y_te) = tf.keras.datasets.mnist.load_data()
+            X_tr = (X_tr_all[:n_train][..., np.newaxis] / 255.0).astype(np.float32)
+            y_tr = y_tr_all[:n_train]
+            X_te = (X_te[:2000][..., np.newaxis] / 255.0).astype(np.float32)
+            y_te = y_te[:2000]
+
+        DIGITS = [str(i) for i in range(10)]
+        keras.backend.clear_session()
+
+        # Build model
+        inp = keras.Input(shape=(28, 28, 1))
+        x   = inp
+        # Block 1
+        x = layers.Conv2D(filters1, kernel_sz, padding="same", activation="relu")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Conv2D(filters1, kernel_sz, padding="same", activation="relu")(x)
+        x = layers.MaxPooling2D(2)(x)
+        x = layers.Dropout(0.25)(x)
+        # Block 2
+        x = layers.Conv2D(filters2, kernel_sz, padding="same", activation="relu")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Conv2D(filters2, kernel_sz, padding="same", activation="relu")(x)
+        x = layers.MaxPooling2D(2)(x)
+        x = layers.Dropout(0.25)(x)
+        # Head
+        x = layers.GlobalAveragePooling2D()(x) if use_gap else layers.Flatten()(x)
+        x = layers.Dense(dense_u, activation="relu")(x)
+        x = layers.Dropout(dropout)(x)
+        out = layers.Dense(10, activation="softmax")(x)
+        model = keras.Model(inp, out, name="CNN")
+        model.compile(optimizer="adam", loss="sparse_categorical_crossentropy",
+                      metrics=["accuracy"])
+
+        st.markdown("**Architecture**")
+        st.markdown(_arch_md(model))
+
+        bar = st.progress(0); status = st.empty()
+        history = model.fit(
+            X_tr, y_tr, epochs=epochs, batch_size=batch_sz,
+            validation_split=0.15, verbose=0,
+            callbacks=[_keras_progress_cb(epochs, bar, status)],
+        )
+        bar.empty(); status.empty()
+
+        y_pred = np.argmax(model.predict(X_te, verbose=0), axis=1)
+        acc = accuracy_score(y_te, y_pred)
+
+        show_metrics({"Test Accuracy":  f"{acc:.4f}",
+                      "Val Accuracy":   f"{history.history['val_accuracy'][-1]:.4f}",
+                      "Total Params":   f"{model.count_params():,}",
+                      "Training size":  str(n_train)})
+
+        col1, col2 = st.columns(2)
+        with col1:
+            _plot_history_st(history, "CNN (MNIST)")
+        with col2:
+            cm = confusion_matrix(y_te, y_pred)
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ConfusionMatrixDisplay(cm, display_labels=DIGITS).plot(ax=ax, colorbar=False, cmap="Oranges")
+            ax.set_title("Confusion Matrix"); fig_to_st(fig)
+
+        # Sample predictions
+        st.subheader("Sample Predictions  (green = correct, red = wrong)")
+        n_show = 12
+        fig, axes = plt.subplots(2, n_show // 2, figsize=(n_show * 1.4, 5))
+        axes = axes.flatten()
+        wrong = np.where(y_te != y_pred)[0]
+        right = np.where(y_te == y_pred)[0]
+        idxs  = list(right[:n_show // 2]) + list(wrong[:n_show // 2])
+        for ax, idx in zip(axes, idxs):
+            ax.imshow(X_te[idx].squeeze(), cmap="gray")
+            color = "green" if y_te[idx] == y_pred[idx] else "red"
+            ax.set_title(f"T:{y_te[idx]} P:{y_pred[idx]}", color=color, fontsize=9)
+            ax.axis("off")
+        plt.suptitle("Top: Correct   Bottom: Mistakes", fontsize=11)
+        plt.tight_layout(); st.pyplot(fig); plt.close(fig)
+
+        # Conv filter visualization (weights of first conv layer)
+        with st.expander("Conv Layer 1 – Learned Filters"):
+            first_conv = [l for l in model.layers if isinstance(l, layers.Conv2D)][0]
+            W = first_conv.get_weights()[0]          # (kH, kW, 1, n_filters)
+            n_f = min(W.shape[-1], 16)
+            fig, axes = plt.subplots(2, n_f // 2, figsize=(n_f * 0.9, 3.5))
+            axes = axes.flatten()
+            for i in range(n_f):
+                filt = W[:, :, 0, i]
+                filt = (filt - filt.min()) / (filt.max() - filt.min() + 1e-8)
+                axes[i].imshow(filt, cmap="viridis"); axes[i].axis("off")
+                axes[i].set_title(f"f{i}", fontsize=7)
+            plt.suptitle("Learned Conv1 Filters", fontsize=10)
+            plt.tight_layout(); st.pyplot(fig); plt.close(fig)
+
+    else:
+        st.info("👆 Set parameters and click **Train CNN** to start.")
+
+    st.info("**Key concept:** Convolutions detect local patterns with shared weights — "
+            "edge detectors, curve detectors, etc. emerge automatically from training. "
+            "MaxPooling introduces spatial invariance; BatchNorm stabilises deep conv stacks.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB: RNN
+# ══════════════════════════════════════════════════════════════════════════════
+def _tab_rnn():
+    tf, keras, layers, _ = _tf()
+
+    st.markdown("### Recurrent Neural Network — time-series prediction")
+    st.markdown(
+        "An RNN maintains a **hidden state** passed from one time step to the next. "
+        "This makes it suitable for sequential data, but vanilla RNNs struggle with "
+        "long-range dependencies due to vanishing gradients."
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        seq_len = st.slider("Sequence length", 10, 150, 50, key="rnn_sl")
+        units   = st.select_slider("Hidden units", [16, 32, 64, 128], value=64, key="rnn_u")
+        n_layers= st.slider("RNN layers", 1, 4, 1, key="rnn_nl")
+    with c2:
+        dropout = st.slider("Dropout", 0.0, 0.5, 0.0, 0.05, key="rnn_dr")
+        epochs  = st.slider("Epochs", 10, 80, 30, key="rnn_ep")
+        batch_sz= st.select_slider("Batch size", [32, 64, 128, 256], value=64, key="rnn_bs")
+    with c3:
+        noise    = st.slider("Signal noise", 0.01, 0.5, 0.08, 0.01, key="rnn_noise")
+        vs_lstm  = st.checkbox("Compare with LSTM", True, key="rnn_vs")
+        vs_mlp   = st.checkbox("Compare with MLP baseline", True, key="rnn_vsm")
+
+    if st.button("🚀 Train RNN", key="rnn_train"):
+        # Data
+        rng = np.random.default_rng(42)
+        t   = np.linspace(0, 6 * np.pi * 10, 3000)
+        sig = (np.sin(0.3*t) + 0.5*np.sin(0.7*t) + 0.3*np.sin(1.3*t)
+               + noise * rng.standard_normal(3000)).astype(np.float32)
+        X, y = _make_sequences(sig, seq_len)
+        split = int(0.8 * len(X))
+        X_tr, X_te, y_tr, y_te = X[:split], X[split:], y[:split], y[split:]
+
+        # Build RNN
+        keras.backend.clear_session()
+        inp = keras.Input(shape=(seq_len, 1))
+        x   = inp
+        for i in range(n_layers):
+            x = layers.SimpleRNN(units, return_sequences=(i < n_layers - 1),
+                                 dropout=dropout)(x)
+        out = layers.Dense(1)(x)
+        rnn_model = keras.Model(inp, out, name="SimpleRNN")
+        rnn_model.compile(optimizer="adam", loss="mse")
+
+        st.markdown("**Architecture**")
+        st.markdown(_arch_md(rnn_model))
+
+        bar = st.progress(0); status = st.empty()
+        history = rnn_model.fit(
+            X_tr, y_tr, epochs=epochs, batch_size=batch_sz,
+            validation_split=0.15, verbose=0,
+            callbacks=[_keras_progress_cb(epochs, bar, status)],
+        )
+        bar.empty(); status.empty()
+
+        y_pred = rnn_model.predict(X_te, verbose=0).flatten()
+        rmse_rnn = float(np.sqrt(np.mean((y_te - y_pred)**2)))
+
+        metrics = {"RNN RMSE": f"{rmse_rnn:.4f}", "RNN Params": f"{rnn_model.count_params():,}"}
+
+        # Optional comparisons
+        rmse_lstm_val, rmse_mlp_val = None, None
+        if vs_lstm:
+            keras.backend.clear_session()
+            li = keras.Input(shape=(seq_len, 1))
+            lx = li
+            for i in range(n_layers):
+                lx = layers.LSTM(units, return_sequences=(i < n_layers - 1), dropout=dropout)(lx)
+            lout = layers.Dense(1)(lx)
+            lstm_m = keras.Model(li, lout, name="LSTM")
+            lstm_m.compile(optimizer="adam", loss="mse")
+            lstm_m.fit(X_tr, y_tr, epochs=epochs, batch_size=batch_sz,
+                       validation_split=0.15, verbose=0)
+            lp = lstm_m.predict(X_te, verbose=0).flatten()
+            rmse_lstm_val = float(np.sqrt(np.mean((y_te - lp)**2)))
+            metrics["LSTM RMSE"] = f"{rmse_lstm_val:.4f}"
+
+        if vs_mlp:
+            keras.backend.clear_session()
+            mi = keras.Input(shape=(seq_len, 1))
+            mx = layers.Flatten()(mi)
+            mx = layers.Dense(units, activation="relu")(mx)
+            mx = layers.Dense(units // 2, activation="relu")(mx)
+            mo = layers.Dense(1)(mx)
+            mlp_m = keras.Model(mi, mo, name="MLP")
+            mlp_m.compile(optimizer="adam", loss="mse")
+            mlp_m.fit(X_tr, y_tr, epochs=epochs, batch_size=batch_sz,
+                      validation_split=0.15, verbose=0)
+            mp = mlp_m.predict(X_te, verbose=0).flatten()
+            rmse_mlp_val = float(np.sqrt(np.mean((y_te - mp)**2)))
+            metrics["MLP RMSE"] = f"{rmse_mlp_val:.4f}"
+
+        show_metrics(metrics)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            _plot_history_st(history, "RNN Training")
+        with col2:
+            _plot_ts_st(y_te, y_pred, "RNN – Prediction vs Actual")
+
+        # Model comparison bar
+        if vs_lstm or vs_mlp:
+            with st.expander("Model RMSE Comparison"):
+                cmp_names = ["RNN"]
+                cmp_vals  = [rmse_rnn]
+                if vs_lstm and rmse_lstm_val: cmp_names.append("LSTM");  cmp_vals.append(rmse_lstm_val)
+                if vs_mlp  and rmse_mlp_val:  cmp_names.append("MLP");   cmp_vals.append(rmse_mlp_val)
+                fig, ax = plt.subplots(figsize=(8, 3))
+                bars = ax.bar(cmp_names, cmp_vals, color=[PALETTE[i % 10] for i in range(len(cmp_names))])
+                ax.bar_label(bars, fmt="%.4f"); ax.set_ylabel("RMSE (lower = better)")
+                ax.set_title("Model Comparison"); fig_to_st(fig)
+
+    else:
+        st.info("👆 Set parameters and click **Train RNN** to start.")
+
+    st.info("**Key concept:** The hidden state *h_t = f(W·x_t + U·h_{t-1})* is the RNN's "
+            "memory. Vanishing gradients make it hard to remember events more than ~20 steps "
+            "back — the motivation for LSTM's gating mechanism.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB: LSTM
+# ══════════════════════════════════════════════════════════════════════════════
+def _tab_lstm():
+    tf, keras, layers, _ = _tf()
+
+    st.markdown("### LSTM — Long Short-Term Memory")
+    st.markdown(
+        "LSTMs add three **gates** (forget, input, output) and a **cell state** — "
+        "a separate 'memory highway' that can carry information across many time steps "
+        "without vanishing. GRU is a lighter variant with two gates."
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        seq_len    = st.slider("Sequence length", 10, 150, 60, key="lstm_sl")
+        units      = st.select_slider("LSTM units", [16, 32, 64, 128], value=64, key="lstm_u")
+        n_layers   = st.slider("LSTM layers", 1, 4, 2, key="lstm_nl")
+    with c2:
+        dropout    = st.slider("Dropout", 0.0, 0.5, 0.1, 0.05, key="lstm_dr")
+        bidir      = st.checkbox("Bidirectional", False, key="lstm_bidir")
+        epochs     = st.slider("Epochs", 10, 80, 30, key="lstm_ep")
+    with c3:
+        batch_sz   = st.select_slider("Batch size", [32, 64, 128, 256], value=64, key="lstm_bs")
+        noise      = st.slider("Signal noise", 0.01, 0.5, 0.08, 0.01, key="lstm_noise")
+        cmp_rnn    = st.checkbox("Compare with RNN", True, key="lstm_crnn")
+        cmp_gru    = st.checkbox("Compare with GRU", True, key="lstm_cgru")
+
+    if st.button("🚀 Train LSTM", key="lstm_train"):
+        rng = np.random.default_rng(42)
+        t   = np.linspace(0, 6 * np.pi * 10, 3000)
+        sig = (np.sin(0.3*t) + 0.5*np.sin(0.7*t) + 0.3*np.sin(1.3*t)
+               + noise * rng.standard_normal(3000)).astype(np.float32)
+        X, y = _make_sequences(sig, seq_len)
+        split = int(0.8 * len(X))
+        X_tr, X_te, y_tr, y_te = X[:split], X[split:], y[:split], y[split:]
+
+        def _build(cell_cls, bidir_flag=False):
+            keras.backend.clear_session()
+            i = keras.Input(shape=(seq_len, 1))
+            x = i
+            for j in range(n_layers):
+                rs = (j < n_layers - 1)
+                cell = cell_cls(units, return_sequences=rs, dropout=dropout)
+                x = layers.Bidirectional(cell)(x) if bidir_flag else cell(x)
+            return keras.Model(i, layers.Dense(1)(x))
+
+        # ── LSTM ──────────────────────────────────────────────────────────────
+        lstm_m = _build(layers.LSTM, bidir)
+        lstm_m.compile(optimizer="adam", loss="mse")
+
+        st.markdown("**LSTM Architecture**")
+        st.markdown(_arch_md(lstm_m))
+
+        bar = st.progress(0); status = st.empty()
+        history = lstm_m.fit(
+            X_tr, y_tr, epochs=epochs, batch_size=batch_sz,
+            validation_split=0.15, verbose=0,
+            callbacks=[_keras_progress_cb(epochs, bar, status)],
+        )
+        bar.empty(); status.empty()
+
+        y_pred = lstm_m.predict(X_te, verbose=0).flatten()
+        rmse_lstm = float(np.sqrt(np.mean((y_te - y_pred)**2)))
+
+        metrics = {"LSTM RMSE": f"{rmse_lstm:.4f}",
+                   "LSTM Params": f"{lstm_m.count_params():,}",
+                   "Bidirectional": str(bidir)}
+
+        # ── Optional comparisons ───────────────────────────────────────────────
+        preds_dict = {"LSTM": (y_pred, rmse_lstm)}
+
+        if cmp_rnn:
+            rnn_m = _build(layers.SimpleRNN)
+            rnn_m.compile(optimizer="adam", loss="mse")
+            rnn_m.fit(X_tr, y_tr, epochs=epochs, batch_size=batch_sz,
+                      validation_split=0.15, verbose=0)
+            rp = rnn_m.predict(X_te, verbose=0).flatten()
+            rmse_rnn = float(np.sqrt(np.mean((y_te - rp)**2)))
+            metrics["RNN RMSE"] = f"{rmse_rnn:.4f}"
+            preds_dict["RNN"] = (rp, rmse_rnn)
+
+        if cmp_gru:
+            gru_m = _build(layers.GRU)
+            gru_m.compile(optimizer="adam", loss="mse")
+            gru_m.fit(X_tr, y_tr, epochs=epochs, batch_size=batch_sz,
+                      validation_split=0.15, verbose=0)
+            gp = gru_m.predict(X_te, verbose=0).flatten()
+            rmse_gru = float(np.sqrt(np.mean((y_te - gp)**2)))
+            metrics["GRU RMSE"] = f"{rmse_gru:.4f}"
+            preds_dict["GRU"] = (gp, rmse_gru)
+
+        show_metrics(metrics)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            _plot_history_st(history, "LSTM Training")
+        with col2:
+            _plot_ts_st(y_te, y_pred, "LSTM – Prediction vs Actual")
+
+        # Overlay predictions
+        if len(preds_dict) > 1:
+            with st.expander("Overlay: LSTM vs RNN vs GRU predictions"):
+                n_show = 200
+                fig, ax = plt.subplots(figsize=(12, 4))
+                ax.plot(y_te[:n_show], label="Actual", color="black", lw=1.5)
+                for i, (name, (pred, rmse_v)) in enumerate(preds_dict.items()):
+                    ax.plot(pred[:n_show], label=f"{name} (RMSE={rmse_v:.4f})",
+                            color=PALETTE[i], lw=1.2, alpha=0.85)
+                ax.set_title("Model Predictions Overlay"); ax.legend()
+                fig_to_st(fig)
+
+            # RMSE comparison bar
+            fig, ax = plt.subplots(figsize=(8, 3))
+            names_c = list(preds_dict.keys())
+            rmse_c  = [v for _, v in preds_dict.values()]
+            bars = ax.bar(names_c, rmse_c, color=[PALETTE[i % 10] for i in range(len(names_c))])
+            ax.bar_label(bars, fmt="%.4f"); ax.set_ylabel("RMSE (lower = better)")
+            ax.set_title("LSTM · GRU · RNN — RMSE Comparison"); fig_to_st(fig)
+
+        # Gate explanation
+        with st.expander("📖 LSTM Gate Mechanism"):
+            st.markdown("""
+| Gate | Formula | Purpose |
+|------|---------|---------|
+| **Forget** | *f_t = σ(W_f · [h_{t-1}, x_t] + b_f)* | Decides what to throw away from cell state |
+| **Input**  | *i_t = σ(W_i · [h_{t-1}, x_t] + b_i)* | Decides which new info to store |
+| **Update** | *C̃_t = tanh(W_C · [h_{t-1}, x_t])* | New candidate values for cell state |
+| **Output** | *o_t = σ(W_o · [h_{t-1}, x_t] + b_o)* | Decides what to output as hidden state |
+
+Cell state update: **C_t = f_t ⊙ C_{t-1} + i_t ⊙ C̃_t**
+
+**GRU** merges forget + input into a single *update gate* and removes the separate cell state,
+cutting parameters by ~25 % with minimal accuracy loss on most tasks.
+""")
+
+    else:
+        st.info("👆 Configure and click **Train LSTM** to start.")
+
+    st.info("**Key concept:** The LSTM cell state *C_t* acts as a 'conveyor belt' that "
+            "can carry gradients across hundreds of time steps without vanishing. "
+            "GRU achieves similar results with fewer parameters.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NEURAL NETWORKS PAGE (tabs router)
+# ══════════════════════════════════════════════════════════════════════════════
+def page_neural_networks():
+    st.title("🧠 Neural Networks")
+    st.markdown(
+        "Five architectures — from simple feedforward to sequential memory networks — "
+        "each with interactive hyperparameters and live training."
+    )
+
+    tab_ann, tab_dnn, tab_cnn, tab_rnn, tab_lstm = st.tabs([
+        "🔵 ANN", "🟣 DNN", "🖼️ CNN", "🔁 RNN", "⏳ LSTM"
+    ])
+    with tab_ann:  _tab_ann()
+    with tab_dnn:  _tab_dnn()
+    with tab_cnn:  _tab_cnn()
+    with tab_rnn:  _tab_rnn()
+    with tab_lstm: _tab_lstm()
+
+
 PAGES = {
     "🏠  Home":                    page_home,
     "📈  Linear Regression":       page_linear_regression,
@@ -972,6 +1752,7 @@ PAGES = {
     "🌲  Bagging & Random Forest": page_random_forest,
     "⚡  Boosting":                page_boosting,
     "🎯  Ensemble Methods":        page_ensemble,
+    "🧠  Neural Networks":         page_neural_networks,
 }
 
 PAGES[page]()

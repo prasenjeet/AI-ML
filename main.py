@@ -3,13 +3,18 @@ ML Concepts – Main Runner
 ═════════════════════════
 Run all or individual concepts:
 
-    python main.py                    # run everything
+    python main.py                    # run everything (ML + Neural Networks)
     python main.py --topic lr         # linear regression only
     python main.py --topic dt         # decision tree only
     python main.py --topic km         # k-means clustering only
     python main.py --topic rf         # bagging & random forest only
     python main.py --topic boost      # boosting only
     python main.py --topic ens        # ensemble methods only
+    python main.py --topic ann        # artificial neural network
+    python main.py --topic dnn        # deep neural network
+    python main.py --topic cnn        # convolutional neural network
+    python main.py --topic rnn        # recurrent neural network
+    python main.py --topic lstm       # long short-term memory
     python main.py --save-plots       # save PNGs to ./plots/
 """
 
@@ -19,12 +24,19 @@ import time
 from pathlib import Path
 
 TOPICS = {
-    "lr":    ("Linear Regression",      "ml_concepts.models.linear_regression"),
-    "dt":    ("Decision Tree",           "ml_concepts.models.decision_tree"),
-    "km":    ("K-Means Clustering",      "ml_concepts.models.kmeans_clustering"),
-    "rf":    ("Bagging & Random Forest", "ml_concepts.models.bagging_random_forest"),
-    "boost": ("Boosting",                "ml_concepts.models.boosting"),
-    "ens":   ("Ensemble Methods",        "ml_concepts.models.ensemble"),
+    # ── Classical ML ──────────────────────────────────────────────────────────
+    "lr":    ("Linear Regression",           "ml_concepts.models.linear_regression"),
+    "dt":    ("Decision Tree",               "ml_concepts.models.decision_tree"),
+    "km":    ("K-Means Clustering",          "ml_concepts.models.kmeans_clustering"),
+    "rf":    ("Bagging & Random Forest",     "ml_concepts.models.bagging_random_forest"),
+    "boost": ("Boosting",                    "ml_concepts.models.boosting"),
+    "ens":   ("Ensemble Methods",            "ml_concepts.models.ensemble"),
+    # ── Neural Networks ───────────────────────────────────────────────────────
+    "ann":   ("Artificial Neural Network",   "ml_concepts.models.ann"),
+    "dnn":   ("Deep Neural Network",         "ml_concepts.models.dnn"),
+    "cnn":   ("Convolutional Neural Network","ml_concepts.models.cnn"),
+    "rnn":   ("Recurrent Neural Network",    "ml_concepts.models.rnn"),
+    "lstm":  ("LSTM",                        "ml_concepts.models.lstm"),
 }
 
 
